@@ -948,6 +948,7 @@ local function makeMacro(name, icon, unlearned, id)
         spam = spamCondition(name),
         stealth = classConfig().isStealthSpell(name) ~= nil,
         stances = stancesOf(name, id),
+        spellID = id,
         -- the question mark icon lets #showtooltip show the spell's own icon on the action bar
         macroName = name:sub(1, MAX_MACRO_NAME),
         macroIcon = ICON_QUESTION_MARK,
@@ -983,9 +984,14 @@ end
 
 local getSpellTexture = C_Spell and C_Spell.GetSpellTexture or GetSpellTexture
 
+-- The spell named by a leading "#showtooltip <spell>" line, or nil.
+local function showtooltipSpell(body)
+    return body:match("^#showtooltip[ \t]+([^\n]*%S)")
+end
+
 -- The icon of the spell named by a leading "#showtooltip <spell>" line, or nil.
 local function showtooltipIcon(body)
-    local spell = body:match("^#showtooltip[ \t]+([^\n]*%S)")
+    local spell = showtooltipSpell(body)
     if spell and getSpellTexture then return getSpellTexture(spell) end
 end
 
@@ -1001,6 +1007,7 @@ local function makeCustomMacro(entry, index, categoryRank)
         macroName = entry.name:sub(1, MAX_MACRO_NAME),
         macroIcon = entry.icon or ICON_QUESTION_MARK,
         icon = entry.icon or showtooltipIcon(entry.body) or ICON_QUESTION_MARK,
+        tooltipSpell = showtooltipSpell(entry.body),
         body = entry.body,
     }
 end
@@ -1234,6 +1241,39 @@ function smb.collectMacros()
     for _, macro in ipairs(smb.macros) do
         if not macro.custom then setBody(macro) end
     end
+end
+
+-- The id of the highest rank of a spell the player knows, looked up by name, or nil.
+local function knownSpellID(name)
+    local info = C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(name)
+    return info and info.spellID
+end
+
+-- The spell whose own tooltip a page macro shows: its highest known rank, or a custom macro's known
+-- #showtooltip spell. Nil for equipment macros and custom macros without one.
+local function tooltipSpellID(macro)
+    if macro.equipment then return nil end
+    if macro.custom then return macro.tooltipSpell and knownSpellID(macro.tooltipSpell) end
+    return knownSpellID(macro.name) or macro.spellID
+end
+
+-- What a page macro's game tooltip describes: "item" (the equipped item), "spell", or nil when it has none.
+function smb.gameTooltipKind(macro)
+    if macro.equipment then return "item" end
+    return tooltipSpellID(macro) and "spell" or nil
+end
+
+-- Fills GameTooltip with the game's own tooltip for what a page macro casts or uses. False when there is
+-- none (see smb.gameTooltipKind).
+function smb.setGameTooltip(macro)
+    if macro.equipment then
+        GameTooltip:SetInventoryItem("player", macro.slot)
+        return true
+    end
+    local id = tooltipSpellID(macro)
+    if not id then return false end
+    GameTooltip:SetSpellByID(id)
+    return true
 end
 
 -- Rewrites the WoW macro at index if its body differs from the page's. Index 0 means it does not exist.
