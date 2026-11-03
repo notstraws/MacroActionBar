@@ -21,6 +21,7 @@ local SPAM_LABELS = {
     nostealth = {"Stay In Stealth On Recast", "Stay stealthed"},
     noform = {"Stay In Form On Recast", "Stay in form"},
     nochanneling = {"Don't Recast While Channeling", "No recast"},
+    ["!"] = {"Don't Toggle Off On Recast", "Spammable"},
 }
 
 local function spamLabels(macro)
@@ -136,13 +137,16 @@ local function showMacroMenu(button)
             -- a sequence can't downrank (see castBody in Macros.lua)
             addOption("Downrank In Raids", "raidRank1"):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
         end
-        if macro.spam then addOption(spamLabels(macro)[1], "spam") end
+        -- "Don't Toggle Off On Recast" (Auto Shot) sits below Enable Pet Attack instead
+        local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
+        if macro.spam and not noToggle then addOption(spamLabels(macro)[1], "spam") end
         if macro.stances then addOption("Switch To " .. macro.stances[1], "stance") end
         if macro.target then addOption("Cast On Focus", "focus") end
         if macro.buff then addOption("Cast On Nearest Player", "nearest") end
         if smb.offersPetAttack(macro) then addOption("Enable Pet Attack", "petAttack") end
-        -- one submenu per side of the cast: /startattack, the race's racials and the equipped on-use items,
-        -- each on either side, both or neither, and /stopcasting before only
+        if noToggle then addOption(spamLabels(macro)[1], "spam") end
+        -- one submenu per side of the cast: /startattack, /cast !Auto Shot, the race's racials and the equipped
+        -- on-use items, each on either side, both or neither, and /stopcasting before only
         local function addSide(side)
             -- each line as {label, id, isOn, toggle}, the id naming it for smb.sidePosition
             local lines = {}
@@ -152,6 +156,7 @@ local function showMacroMenu(button)
                     function() smb.toggleLine(macro, key, side) end}
             end
             if smb.offersStartAttack(macro) then addLine("startAttack", "Start Attack") end
+            if smb.offersAutoShot(macro) then addLine("autoShot", "Auto Shot") end
             if side == "before" and smb.offersStopCast(macro) then addLine("stopCast", "Stop Casting") end
             if smb.offersUseItems(macro) then
                 for _, racial in ipairs(smb.offeredRacials()) do
@@ -740,15 +745,16 @@ local function buildPage(page)
             smb.setCountSpellsOnBars(not smb.countsSpellsOnBars())
             layout(page)
         end)
+        if smb.classOffersPetAttack() or smb.classOffersStopCast() or smb.classOffersStartAttack()
+            or smb.classOffersAutoShot() then
+            rootDescription:CreateDivider()
+            rootDescription:CreateTitle("Global Macro Settings")
+        end
         if smb.classOffersPetAttack() then
             rootDescription:CreateCheckbox("Enable Pet attacks before spell cast", smb.petAttacksByDefault, function()
                 smb.setPetAttacksByDefault(not smb.petAttacksByDefault())
                 refresh(page) -- rewrites the macros that follow the default
             end)
-        end
-        if smb.classOffersStopCast() or smb.classOffersStartAttack() then
-            rootDescription:CreateDivider()
-            rootDescription:CreateTitle("Global Macro Settings")
         end
         if smb.classOffersStopCast() then
             rootDescription:CreateCheckbox("Stop casting before spell cast", smb.stopsCastingByDefault, function()
@@ -759,6 +765,12 @@ local function buildPage(page)
         if smb.classOffersStartAttack() then
             rootDescription:CreateCheckbox("Start attack after spell cast", smb.startsAttackByDefault, function()
                 smb.setStartsAttackByDefault(not smb.startsAttackByDefault())
+                refresh(page) -- rewrites the macros that follow the default
+            end)
+        end
+        if smb.classOffersAutoShot() then
+            rootDescription:CreateCheckbox("Auto Shot after spell cast", smb.autoShotsByDefault, function()
+                smb.setAutoShotsByDefault(not smb.autoShotsByDefault())
                 refresh(page) -- rewrites the macros that follow the default
             end)
         end

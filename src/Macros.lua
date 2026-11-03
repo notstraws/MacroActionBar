@@ -26,16 +26,18 @@ end
 -- of a buffs spell's macro that casts on the nearest friendly player), "pet" (a summon macro casts the
 -- pet's ability while that pet is out), "raidRank1" (the macro casts rank 1 in a raid group), "spam"
 -- (the macro does nothing while its channelled spell is channelling, its stealth spell is on, or you are in
--- its shapeshift form), "stance" (the macro switches to a
--- stance the spell can be cast in first), "petAttack" (the macro also sends
+-- its shapeshift form, and casts a toggle spell as "!<spell>" so it doesn't toggle off), "stance" (the
+-- macro switches to a stance the spell can be cast in first), "petAttack" (the macro also sends
 -- the pet to attack), "stopCast" (the macro stops the current cast first) or "startAttack" (the macro
 -- starts melee auto-attack after the cast). For petAttack, stopCast and startAttack, true or false overrides the
 -- setting's default (optionDefault), nil follows it. "startAttackBefore" also adds /startattack before the
--- cast (see smb.isLineOn); an old "stopCastAfter" is ignored. "useItems" and "useItemsAfter" hold a list of equipment
+-- cast (see smb.isLineOn); an old "stopCastAfter" is ignored. "autoShotBefore" and "autoShotAfter" add
+-- "/cast !Auto Shot" before (or after) the cast (see smb.offersAutoShot); for autoShotAfter, true or false
+-- overrides its default (autoShotDefault), nil follows it. "useItems" and "useItemsAfter" hold a list of equipment
 -- slots instead of a flag: the macro uses each slot's item, in that order, before (or after) the cast. "racials" and
 -- "racialsAfter" hold a set of racial names: the macro casts each one before (or after) the cast. "order" and
 -- "orderAfter" hold the order the player ticked a side's lines in, as a list of ids ("stopCast", "startAttack",
--- a racial's name or a slot number); it only orders the lines the settings above turn on (see sideEntries).
+-- "autoShot", a racial's name or a slot number); it only orders the lines the settings above turn on (see sideEntries).
 -- "equipStopAttack" and "equipStopCast" are keyed by inventory slot rather than spell name: the equipment macro
 -- for that slot starts with /stopattack (or /stopcasting) before using the item. "modifiers" holds a table
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held,
@@ -101,17 +103,28 @@ function smb.setStartsAttackByDefault(on)
     MacroSpellbookDB.startAttackDefault = on or nil
 end
 
+-- Whether "autoShotAfter" is on for every spell macro that has no setting of its own.
+function smb.autoShotsByDefault()
+    return MacroSpellbookDB ~= nil and MacroSpellbookDB.autoShotDefault == true
+end
+
+function smb.setAutoShotsByDefault(on)
+    MacroSpellbookDB = MacroSpellbookDB or {}
+    MacroSpellbookDB.autoShotDefault = on or nil
+end
+
 -- The settings with a default; each spell macro stores one only where it differs from the default.
 local DEFAULTED = { petAttack = true, stopCast = true, startAttack = true }
 
 -- The equipment macros' settings, keyed by the macro's slot (see settings).
 local EQUIPMENT_OPTIONS = { equipStopAttack = true, equipStopCast = true }
 
--- The default of a setting that has one ("petAttack", "stopCast" or "startAttack"), or nil.
+-- The default of a setting that has one ("petAttack", "stopCast", "startAttack" or "autoShotAfter"), or nil.
 local function optionDefault(key)
     if key == "petAttack" then return smb.petAttacksByDefault() end
     if key == "stopCast" then return smb.stopsCastingByDefault() end
     if key == "startAttack" then return smb.startsAttackByDefault() end
+    if key == "autoShotAfter" then return smb.autoShotsByDefault() end
 end
 
 local function toggleSetting(key, name)
@@ -174,6 +187,7 @@ local function classConfig()
         isRaidRank1Spell = nameMatcher(source.raidRank1),
         isChanneledSpell = nameMatcher(source.channeled),
         isStealthSpell = nameMatcher(source.stealth),
+        isToggleSpell = nameMatcher(source.toggle),
         isCooldownSpell = nameMatcher(source.cooldowns),
         isBuffSpell = nameMatcher(source.buffs),
     }
@@ -250,6 +264,19 @@ function smb.offersStartAttack(macro)
     return not macro.custom and not macro.equipment and not macro.stealth and smb.classOffersStartAttack()
 end
 
+-- A Hunter's spell macros, but Auto Shot's own, offer an "autoShot" line on either side of the cast once
+-- Auto Shot is learned. A focus copy shares its spell's setting. Custom and equipment macros don't offer it.
+function smb.offersAutoShot(macro)
+    return smb.classOffersAutoShot() and macro.name ~= "Auto Shot" and not macro.custom and not macro.equipment
+end
+
+-- Whether the player is a Hunter who has learned Auto Shot.
+function smb.classOffersAutoShot()
+    if select(2, UnitClass("player")) ~= "HUNTER" then return false end
+    local autoShot = smb.macroByName["Auto Shot"]
+    return autoShot ~= nil and not autoShot.unlearned
+end
+
 -- Whether a macro offers an option ("mouseover", "cursor", "focus", "nearest", "pet", "raidRank1", "spam", "stance",
 -- "petAttack", "stopCast" or "startAttack", or an equipment macro's "equipStopAttack" or "equipStopCast") and
 -- the player turned it on.
@@ -298,10 +325,22 @@ local PLACEMENT = {
     startAttack = {main = "after", other = "before", setting = "startAttackBefore"},
 }
 
--- Whether a macro has its "stopCast" or "startAttack" line on a side ("before" or "after") of the cast;
--- startAttack can be on either, both or neither, stopCast only before. A focus copy shares its spell's
--- settings.
+-- The lines with no default and no main side: a setting per side, each on or off by itself.
+local SIDE_SETTINGS = {
+    autoShot = {before = "autoShotBefore", after = "autoShotAfter"},
+}
+
+-- Whether a macro has its "stopCast", "startAttack" or "autoShot" line on a side ("before" or "after") of the
+-- cast; startAttack and autoShot can be on either, both or neither, stopCast only before. A focus copy shares
+-- its spell's settings.
 function smb.isLineOn(macro, key, side)
+    if SIDE_SETTINGS[key] then
+        if not smb.offersAutoShot(macro) then return false end
+        local setting = SIDE_SETTINGS[key][side]
+        local on = settings(setting)[macro.name]
+        if on == nil then return optionDefault(setting) == true end
+        return on
+    end
     local placement = PLACEMENT[key]
     if side == placement.main then return smb.isOptionOn(macro, key) end
     if side ~= placement.other then return false end
@@ -542,11 +581,22 @@ function smb.hasSequenceOn(macro)
     return sequenceSteps(macro) ~= nil
 end
 
--- Whether a macro has an options menu: every spell macro does, for stopCast or startAttack, and every
+-- Whether a macro has an options menu: every spell macro does, for stopCast, startAttack or autoShot, and every
 -- equipment macro, for equipStopAttack and equipStopCast.
 function smb.hasOptions(macro)
     return smb.hasCastOptions(macro) or smb.offersStopCast(macro) or smb.offersStartAttack(macro)
+        or smb.offersAutoShot(macro)
         or smb.offersUseItems(macro) or macro.equipment == true
+end
+
+-- The spam option's value for a toggle spell: instead of a condition, the spell is cast as "!<spell>",
+-- which starts it but never toggles it off.
+local NO_TOGGLE = "!"
+
+-- The name a spell macro's /cast uses: "!<spell>" for a toggle spell with its spam option on.
+function smb.castName(macro)
+    if macro.spam == NO_TOGGLE and smb.isOptionOn(macro, "spam") then return NO_TOGGLE .. macro.name end
+    return macro.name
 end
 
 -- A macro conditional joining the given conditions (nil or "" ones are skipped) behind the always-present
@@ -579,22 +629,26 @@ end
 smb.macroByName = {}
 
 -- A clause casting another page macro's spell under a condition (e.g. "mod:shift"), followed by "; ", the
--- way that spell's own page macro targets: at the mouseover or the cursor when that option is on there.
-local function targetedClause(condition, other)
+-- way that spell's own page macro targets: at the mouseover or the cursor when that option is on there. With
+-- noToggle, a toggle spell, such as an aspect, is always cast as "!<spell>", whatever its own page macro's
+-- spam option.
+local function targetedClause(condition, other, noToggle)
+    local name = noToggle and other.spam == NO_TOGGLE and NO_TOGGLE .. other.name or smb.castName(other)
     local conditional = "[" .. condition .. "]"
     if smb.isOptionOn(other, "cursor") then
         conditional = "[" .. condition .. ",@cursor]"
     elseif smb.isOptionOn(other, "mouseover") then
         conditional = "[" .. condition .. ",@mouseover," .. other.target .. ",nodead]" .. conditional
     end
-    return conditional .. " " .. other.name .. "; "
+    return conditional .. " " .. name .. "; "
 end
 
 -- The clauses that cast a macro's modifier spells, each followed by "; ", ready to go before its own, e.g.
 -- "[mod:shift] Fear; [mod:alt,@mouseover,help,nodead][mod:alt] Flash Heal; ", or "". Each spell is cast the
--- way its own page macro targets: at the mouseover or the cursor when that option is on there. A focus
--- pick casts like the spell's focus copy, on the focus target or else the target, but without switching
--- target back after. A spell that isn't learned is left out, keeping its setting. So is a focus pick whose
+-- way its own page macro targets: at the mouseover or the cursor when that option is on there. A toggle
+-- spell, such as an aspect, is always cast as "!<spell>", so holding the key and pressing again never
+-- toggles it off. A focus pick casts like the spell's focus copy, on the focus target or else the target,
+-- but without switching target back after. A spell that isn't learned is left out, keeping its setting. So is a focus pick whose
 -- spell has no focus copy, which only old saved data can hold: removing the copy clears its picks.
 local function modifierClauses(macro)
     local clauses = {}
@@ -607,7 +661,7 @@ local function modifierClauses(macro)
                 clauses[#clauses + 1] = held .. ",@focus," .. other.target .. ",nodead]" .. held .. "] "
                     .. other.name .. "; "
             else
-                clauses[#clauses + 1] = targetedClause("mod:" .. mod, other)
+                clauses[#clauses + 1] = targetedClause("mod:" .. mod, other, true)
             end
         end
     end
@@ -766,11 +820,13 @@ local function stancesOf(name, id)
     return stances
 end
 
--- A macro's "/stopcasting" or "/startattack" line on a side of the cast, with the spam condition on
--- /stopcasting, or nil when it is off on that side.
+-- A macro's "/stopcasting", "/startattack" or "/cast !Auto Shot" line on a side of the cast, with the
+-- spam condition on /stopcasting, or nil when it is off on that side. The "!" keeps a press while Auto Shot
+-- is already repeating from toggling it off, so the macro can be spammed.
 local function placedLine(macro, key, side, spam)
     if not smb.isLineOn(macro, key, side) then return nil end
     if key == "startAttack" then return "/startattack" end
+    if key == "autoShot" then return "/cast " .. NO_TOGGLE .. "Auto Shot" end
     return "/stopcasting" .. (spam and " [" .. spam .. "]" or "")
 end
 
@@ -779,10 +835,10 @@ local ORDER_SETTING = {before = "order", after = "orderAfter"}
 
 -- The lines a macro has on a side of the cast, as {id, text}, in the order the player ticked them. Lines
 -- the order list doesn't name (on by a default, or ticked before it existed) come first, in menu order:
--- stopCast, startAttack, racials, then slots.
+-- stopCast, startAttack, autoShot, racials, then slots.
 local function sideEntries(macro, side, spam)
     local entries = {}
-    for _, key in ipairs({"stopCast", "startAttack"}) do
+    for _, key in ipairs({"stopCast", "startAttack", "autoShot"}) do
         local line = placedLine(macro, key, side, spam)
         if line then entries[#entries + 1] = {key, line} end
     end
@@ -800,7 +856,7 @@ local function sideEntries(macro, side, spam)
 end
 
 -- A line's place among a macro's lines on a side of the cast, or nil when it is off there. id is "stopCast",
--- "startAttack", a racial's name or a slot number.
+-- "startAttack", "autoShot", a racial's name or a slot number.
 function smb.sidePosition(macro, id, side)
     for i, entry in ipairs(sideEntries(macro, side)) do
         if entry[1] == id then return i end
@@ -829,11 +885,15 @@ local function castBody(macro)
     -- stance. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
     -- stealthed (or channelling, or in the form) no clause matches, and a bare #showtooltip would show a question mark
     local spam = smb.isOptionOn(macro, "spam") and macro.spam or nil
+    -- a toggle spell's spam option renames the cast (see smb.castName) rather than adding a condition
+    local name = smb.castName(macro)
+    local noToggle = spam == NO_TOGGLE
+    if noToggle then spam = nil end
     local stance = smb.isOptionOn(macro, "stance") and stanceLine(macro.stances) or ""
     -- the modifier spells' clauses go first, so a held key wins over the form spells, and those over the
     -- macro's own
     local mods = modifierClauses(macro) .. formClauses(macro)
-    local namesSpell = stance ~= "" or (spam ~= nil and mods == "")
+    local namesSpell = stance ~= "" or noToggle or (spam ~= nil and mods == "")
     local before = {}
     for _, entry in ipairs(sideEntries(macro, "before", spam)) do
         before[#before + 1] = entry[2] .. "\n"
@@ -843,6 +903,7 @@ local function castBody(macro)
         .. (smb.isOptionOn(macro, "petAttack") and "/petattack\n" or "") .. stance
     -- with a sequence, every step is cast like the macro's own spell
     local steps = sequenceSteps(macro)
+    if steps then steps[1] = name end
     -- "/cast <conditional> name", or "/cast name" when there is no conditional; with a sequence,
     -- "/castsequence <conditional> reset=2 name, step 2, ..."
     local function cast(conditional)
@@ -850,7 +911,7 @@ local function castBody(macro)
         if steps then
             return "/castsequence " .. mods .. prefix .. SEQUENCE_RESET .. table.concat(steps, ", ")
         end
-        return "/cast " .. mods .. prefix .. macro.name
+        return "/cast " .. mods .. prefix .. name
     end
     -- a sequence can't downrank: a rank 1 clause per target would repeat every step
     if smb.isOptionOn(macro, "raidRank1") and not steps then
@@ -862,7 +923,7 @@ local function castBody(macro)
         elseif smb.isOptionOn(macro, "mouseover") then
             targets = {"@mouseover," .. macro.target .. ",nodead", ""}
         end
-        return header .. (macro.nearest and NEAREST_LINE or "") .. raidRank1Cast(macro.name, targets, spam, mods)
+        return header .. (macro.nearest and NEAREST_LINE or "") .. raidRank1Cast(name, targets, spam, mods)
             .. (macro.focus and FOCUS_FOOTER or "")
     end
     -- a nearest copy casts on the player it just targeted, or on you when no friendly player is near
@@ -877,7 +938,7 @@ local function castBody(macro)
         -- [pet:X] matches the pet's creature family, so another demon being out still summons this one
         local family = macro.name:match("^Summon (.+)$") or macro.name
         return header .. "/cast " .. mods .. cond(spam, "pet:" .. family) .. " " .. macro.petAbility .. "; "
-            .. (spam and cond(spam) .. " " or "") .. macro.name
+            .. (spam and cond(spam) .. " " or "") .. name
     end
     if smb.isOptionOn(macro, "cursor") then
         return header .. cast(cond(spam, "@cursor"))
@@ -919,9 +980,10 @@ smb.macros = {}
 -- The condition a spell's spam option adds to its casts, or nil for spells without one. Stealth toggles
 -- off when cast again, so a stealth spell casts only while not stealthed. For a class with forms (Druids),
 -- a shapeshift spell on the stance bar casts only while not in that form, since casting it again shifts
--- back out.
+-- back out. A toggle spell, such as Auto Shot or an aspect, gets NO_TOGGLE: it toggles off when cast again.
 local function spamCondition(name)
     local c = classConfig()
+    if c.isToggleSpell(name) then return NO_TOGGLE end
     if c.isStealthSpell(name) then return "nostealth" end
     if c.isChanneledSpell(name) then return "nochanneling:" .. name end
     local slot = c.forms[1] and stanceSlot(name)
@@ -1523,12 +1585,19 @@ function smb.toggleOption(macro, key)
     rewrite(macro)
 end
 
--- Flips a macro's "stopCast" or "startAttack" line on one side ("before" or "after") of the cast, moving it
--- to the end of that side's order when it turns on, then rewrites the macro like smb.toggleOption. The focus
--- copy changes too, so the page must be rebuilt after.
+-- Flips a macro's "stopCast", "startAttack" or "autoShot" line on one side ("before" or "after") of the cast,
+-- moving it to the end of that side's order when it turns on, then rewrites the macro like smb.toggleOption.
+-- The focus copy changes too, so the page must be rebuilt after.
 function smb.toggleLine(macro, key, side)
     local placement = PLACEMENT[key]
-    if side == placement.main then
+    if SIDE_SETTINGS[key] then
+        local setting = SIDE_SETTINGS[key][side]
+        if optionDefault(setting) ~= nil then
+            setDefaulted(macro, setting, not smb.isLineOn(macro, key, side))
+        else
+            toggleSetting(setting, macro.name)
+        end
+    elseif side == placement.main then
         flipOption(macro, key)
     else
         toggleSetting(placement.setting, macro.name)

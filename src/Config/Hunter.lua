@@ -5,6 +5,7 @@ smb.classConfigs.HUNTER = {
     categories = {
         { name = "Custom" },
         { name = "Damage", cooldownSteps = true, spells = {
+            "Auto Shot",
             "Arcane Shot",
             "Aimed Shot",
             "Multi-Shot",
@@ -15,8 +16,13 @@ smb.classConfigs.HUNTER = {
             "Mongoose Bite",
             "Counterattack",
             "Strider Kick",
+            "Summon Hawk",
+        } },
+        { name = "Traps", cooldownSteps = true, spells = {
             "Immolation Trap",
             "Explosive Trap",
+            "Freezing Trap",
+            "Frost Trap",
         } },
         { name = "Utility", spells = {
             "Hunter's Mark",
@@ -29,17 +35,17 @@ smb.classConfigs.HUNTER = {
             "Wing Clip",
             "Disengage",
             "Feign Death",
-            "Freezing Trap",
-            "Frost Trap",
-            "Track *",
+            "Scare Beast",
             "Flare",
             "Eagle Eye",
         } },
         { name = "Buffs & Defence", sequence = true, spells = {
-            "Aspect of *",
             "Trueshot Aura",
             "Rapid Fire",
             "Deterrence",
+        } },
+        { name = "Aspects", spells = {
+            "Aspect of *",
         } },
         { name = "Pets", spells = {
             "Call Pet",
@@ -51,10 +57,11 @@ smb.classConfigs.HUNTER = {
             "Beast Training",
             "Beast Lore",
             "Eyes of the Beast",
-            "Scare Beast",
             "Intimidation",
             "Bestial Wrath",
-            "Summon Hawk",
+        } },
+        { name = "Tracking", spells = {
+            "Track *",
         } },
     },
 
@@ -97,6 +104,11 @@ smb.classConfigs.HUNTER = {
     },
 
     stealth = {},
+
+    toggle = {
+        "Auto Shot",
+        "Aspect of *",
+    },
 
     extraSpells = {
         1515, -- Tame Beast
