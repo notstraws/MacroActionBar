@@ -73,14 +73,14 @@ local _, smb = ...
 -- offGcd: spells that don't trigger the global cooldown, such as Presence of Mind, offered in every other
 --   spell macro's Before Casting and After Casting menus (right-click a macro) once learned: ticked, the
 --   macro casts it on that side of the cast, on the same press, e.g. Presence of Mind then Pyroblast.
+--   Warriors list their stances here, e.g. Charge then Berserker Stance; a stance line is skipped while
+--   you're already in that stance.
 --
--- stances: spells that offer "Switch To <stance>" (right-click a macro), as
---   { ["Hamstring"] = { "Battle Stance", "Berserker Stance" }, ... }: the stances the spell can be cast in.
---   With it on, the macro first switches to the first listed stance when you're in none of them. A spell
---   whose tooltip says "Requires ... Stance" offers it too, with the stances the tooltip names (the list
---   then only picks which one to switch to), so the macros follow the game's rules. The stance
---   change and the spell can't always go off on the same press, so press the macro again if the spell
---   fails. Only Warriors use it.
+-- stances: the stances each spell can be cast in, as
+--   { ["Hamstring"] = { "Battle Stance", "Berserker Stance" }, ... }, so a stance pick (see forms below)
+--   only offers the spell in a stance it can be cast in, and its Before Casting menu only offers those
+--   stances (After Casting offers them all). A spell whose tooltip says "Requires ... Stance"
+--   uses the stances the tooltip names instead, so the macros follow the game's rules. Only Warriors use it.
 --
 -- petAbilities: summon spells that offer "Cast <ability> If Summoned" (right-click a macro), as
 --   { ["Summon Imp"] = "Fire Shield", ... }. With it on, the macro casts the ability while that pet is out
@@ -95,10 +95,12 @@ local _, smb = ...
 --   spell is cast the way its own macro targets, like a modifier key's (see below), and a held modifier key
 --   wins over the form. A section named after a form only offers its spells in that form, so Cat offers no
 --   Bear spells, Bear no Cat spells, and Caster neither. The submenu lists the form's section first, or the
---   one named by section, e.g. { name = "Caster", section = "Damage" }. Only Druids use it. With forms set,
---   every shapeshift spell on your stance bar (Moonkin Form too) also offers "Stay In Form On Recast"
---   (right-click a macro): the cast gets a [noform:n] condition, so pressing it again while in that form
---   does nothing instead of shifting you out, and you can spam the button.
+--   one named by section, e.g. { name = "Caster", section = "Damage" }. Druids use it for forms and
+--   Warriors for stances, e.g. { name = "Defensive", spells = { "Defensive Stance" } }: a spell that needs
+--   a stance (see stances above) is only offered in a stance it can be cast in, so Battle offers no
+--   Whirlwind. For Druids, every shapeshift spell on your stance bar (Moonkin Form too) also offers "Stay In
+--   Form On Recast" (right-click a macro): the cast gets a [noform:n] condition, so pressing it again while
+--   in that form does nothing instead of shifting you out, and you can spam the button.
 --
 -- Pet attack is not set here: Hunters and Warlocks get it automatically. Every mouseoverEnemy spell then
 --   offers "Pet Attack" in its Before Casting and After Casting menus (right-click a macro): the macro

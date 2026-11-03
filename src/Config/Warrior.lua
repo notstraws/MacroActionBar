@@ -9,23 +9,27 @@ smb.classConfigs.WARRIOR = {
             "Defensive Stance",
             "Berserker Stance",
         } },
-        { name = "Damage", cooldownSteps = true, spells = {
+        { name = "Arms", cooldownSteps = true, spells = {
             "Heroic Strike",
-            "Cleave",
-            "Slam",
             "Mortal Strike",
-            "Bloodthirst",
-            "Whirlwind",
-            "Execute",
             "Overpower",
-            "Victory Rush",
             "Rend",
             "Thunder Clap",
             "Sweeping Strikes",
-            "Revenge",
+            "Spearing Strike",
+        } },
+        { name = "Fury", cooldownSteps = true, spells = {
+            "Bloodthirst",
+            "Whirlwind",
+            "Slam",
+            "Cleave",
+            "Execute",
+            "Victory Rush",
+        } },
+        { name = "Protection", cooldownSteps = true, spells = {
             "Shield Slam",
+            "Revenge",
             "Sunder Armor",
-            "Spearing Strike"
         } },
         { name = "Utility", spells = {
             "Charge",
@@ -76,13 +80,18 @@ smb.classConfigs.WARRIOR = {
         "Sweeping Strikes",
     },
 
-    offGcd = {},
+    -- the stances, so they can be ticked in every macro's Before Casting and After Casting menus
+    offGcd = {
+        "Battle Stance",
+        "Defensive Stance",
+        "Berserker Stance",
+    },
 
     channeled = {},
 
     stealth = {},
 
-    -- the stances each spell can be cast in; the macro switches to the first when you're in none of them
+    -- the stances each spell can be cast in
     stances = {
         ["Charge"] = { "Battle Stance" },
         ["Overpower"] = { "Battle Stance" },
@@ -104,6 +113,13 @@ smb.classConfigs.WARRIOR = {
         ["Pummel"] = { "Berserker Stance" },
         ["Berserker Rage"] = { "Berserker Stance" },
         ["Recklessness"] = { "Berserker Stance" },
+    },
+
+    -- the stances a spell macro can cast another spell in
+    forms = {
+        { name = "Battle", spells = { "Battle Stance" } },
+        { name = "Defensive", spells = { "Defensive Stance" } },
+        { name = "Berserker", spells = { "Berserker Stance" } },
     },
 
     extraSpells = {

@@ -179,7 +179,6 @@ local function showMacroMenu(button)
         -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Nearest Player instead
         local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
         if macro.spam and not noToggle then addOption(spamLabels(macro)[1], "spam") end
-        if macro.stances then addOption("Switch To " .. macro.stances[1], "stance") end
         if not isCopy then
             if macro.target then addOption("Cast On Focus", "focus") end
             if macro.dispel then addOption("Cast On Enemy Player", "enemyPlayer") end
@@ -208,10 +207,11 @@ local function showMacroMenu(button)
             if side == "before" and smb.offersCancelIceBlock(macro) then addLine("cancelIceBlock", "Cancel Ice Block") end
             if smb.offersUseItems(macro) then
                 -- the offGcd spells share the racials' settings (see castLineSpells in Macros.lua)
-                for _, name in ipairs(smb.offeredOffGcd(macro)) do
+                for _, name in ipairs(smb.offeredOffGcd(macro, side)) do
                     lines[#lines + 1] = {name, name,
                         function() return smb.isRacialOn(macro, name, side) end,
-                        function() smb.toggleRacial(macro, name, side) end}
+                        function() smb.toggleRacial(macro, name, side) end,
+                        stance = smb.isStance(name) or nil}
                 end
                 -- the racials go last
                 for _, racial in ipairs(smb.offeredRacials()) do
@@ -247,8 +247,10 @@ local function showMacroMenu(button)
             local title = side == "before" and "Before Casting" or "After Casting"
             local submenu = rootDescription:CreateButton(title)
             submenu:CreateTitle(title)
-            for _, line in ipairs(lines) do
+            for i, line in ipairs(lines) do
                 local label, id, isOn, toggle = line[1], line[2], line[3], line[4]
+                -- a divider sets the Warrior stances apart from the lines around them
+                if i > 1 and line.stance ~= lines[i - 1].stance then submenu:CreateDivider() end
                 livePlaced(submenu:CreateCheckbox(placed(label, id), isOn, function()
                     toggle()
                     refresh(button:GetParent()) -- rewrites the focus copy too
@@ -365,7 +367,7 @@ local function showMacroMenu(button)
             end
             local current = smb.formSpell(macro, form)
             local submenu = rootDescription:CreateButton(form .. ": " .. (current or "None"))
-            submenu:CreateTitle("Cast In " .. form .. " Form")
+            submenu:CreateTitle("Cast In " .. form .. " " .. smb.formNoun())
             submenu:CreateRadio("None", function() return smb.formSpell(macro, form) == nil end,
                 function() pick(nil) end)
             local listed = false
@@ -383,11 +385,11 @@ local function showMacroMenu(button)
                     end
                 end
             end
-            -- a pick no longer learned (e.g. after a respec), or from another form's section, stays listed, so
-            -- the player sees why it does nothing
+            -- a pick no longer learned (e.g. after a respec), or from another form's section (or needing another
+            -- stance), stays listed, so the player sees why it does nothing
             if current and not listed then
                 local other = smb.macroByName[current]
-                local why = other and not other.unlearned and "other form" or "not learned"
+                local why = other and not other.unlearned and "other " .. smb.formNoun():lower() or "not learned"
                 submenu:CreateRadio(current .. " (" .. why .. ")",
                     function() return smb.formSpell(macro, form) == current end,
                     function() pick(current) end)
@@ -655,9 +657,6 @@ function setMacro(button, macro, bars)
     elseif smb.isOptionOn(macro, "mouseover") then
         button.subText:SetText("Mouseover")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif smb.isOptionOn(macro, "stance") then
-        button.subText:SetText("Stance")
-        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasSequenceOn(macro) then
         button.subText:SetText("Sequence")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
@@ -665,7 +664,7 @@ function setMacro(button, macro, bars)
         button.subText:SetText("Follow-up")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasFormOn(macro) then
-        button.subText:SetText("Forms")
+        button.subText:SetText(smb.formNoun() .. "s")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasModifierOn(macro) then
         button.subText:SetText("Has Modifiers")

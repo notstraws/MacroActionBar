@@ -30,8 +30,7 @@ end
 -- lists a copy of a combatRank1 spell's macro that casts rank 1 out of combat), "pet" (a summon macro casts the
 -- pet's ability while that pet is out), "raidRank1" (the macro casts rank 1 in a raid group), "spam"
 -- (the macro does nothing while its channelled spell is channelling, its stealth spell is on, or you are in
--- its shapeshift form, and casts a toggle spell as "!<spell>" so it doesn't toggle off), "stance" (the
--- macro switches to a stance the spell can be cast in first), "petAttack" (the macro also sends
+-- its shapeshift form, and casts a toggle spell as "!<spell>" so it doesn't toggle off), "petAttack" (the macro also sends
 -- the pet to attack before the cast), "stopCast" (the macro stops the current cast first) or "startAttack" (the macro
 -- starts melee auto-attack after the cast). For petAttack, stopCast and startAttack, true or false overrides the
 -- setting's default (optionDefault), nil follows it. "startAttackBefore" also adds /startattack before the
@@ -306,7 +305,7 @@ function smb.classOffersAutoShot()
     return autoShot ~= nil and not autoShot.unlearned
 end
 
--- Whether a macro offers an option ("mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam", "stance",
+-- Whether a macro offers an option ("mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam",
 -- "petAttack", "stopCast" or "startAttack", or an equipment macro's "equipStopAttack" or "equipStopCast") and
 -- the player turned it on.
 function smb.isOptionOn(macro, key)
@@ -342,8 +341,6 @@ function smb.isOptionOn(macro, key)
         offered = macro.raidRank1
     elseif key == "spam" then
         offered = macro.spam ~= nil
-    elseif key == "stance" then
-        offered = macro.stances ~= nil
     else
         offered = macro.target ~= nil
     end
@@ -405,8 +402,7 @@ end
 -- startAttack).
 function smb.hasCastOptions(macro)
     return macro.target ~= nil or macro.buff or macro.cursor or macro.petAbility ~= nil or macro.raidRank1
-        or macro.combatRank1 or macro.spam ~= nil
-        or macro.stances ~= nil or smb.hasSequenceOn(macro) or smb.hasFollowUpOn(macro)
+        or macro.combatRank1 or macro.spam ~= nil or smb.hasSequenceOn(macro) or smb.hasFollowUpOn(macro)
 end
 
 -- Every spell macro offers using equipped items before and after the cast.
@@ -476,15 +472,22 @@ function smb.offeredRacials()
     return racials
 end
 
--- The learned offGcd spells (see Config.lua) a macro offers on either side of its cast, in page order: all
--- but its own spell.
-function smb.offeredOffGcd(macro)
+-- Whether a cast line spell can go on a side of a macro's cast: a stance before the cast only when the
+-- macro's spell can be cast in it (see stancesOf), so Whirlwind offers no Defensive Stance before it.
+local function fitsSide(macro, name, side)
+    if side ~= "before" or not macro.stances or not smb.isStance(name) then return true end
+    return tContains(macro.stances, name)
+end
+
+-- The learned offGcd spells (see Config.lua) a macro offers on a side of its cast, or either side when side
+-- is nil, in page order: all but its own spell, and before the cast only the stances it can be cast in.
+function smb.offeredOffGcd(macro, side)
     local offered = {}
     if not smb.offersUseItems(macro) then return offered end
     local isOffGcd = classConfig().isOffGcdSpell
     for _, other in ipairs(smb.macros) do
         if smb.macroByName[other.name] == other and not other.unlearned and other.name ~= macro.name
-            and isOffGcd(other.name) then
+            and isOffGcd(other.name) and fitsSide(macro, other.name, side) then
             offered[#offered + 1] = other.name
         end
     end
@@ -507,17 +510,18 @@ local RACIAL_SETTING = {before = "racials", after = "racialsAfter"}
 -- spell macro offers its race's learned racials and the learned offGcd spells.
 function smb.isRacialOn(macro, racial, side)
     local set = settings(RACIAL_SETTING[side])[settingKey(macro)]
-    if not (set and set[racial] and smb.offersUseItems(macro)) then return false end
+    if not (set and set[racial] and smb.offersUseItems(macro) and fitsSide(macro, racial, side)) then return false end
     return tContains(castLineSpells(macro), racial)
 end
 
 -- The offGcd spells and racials a macro casts on a side of the cast, offGcd spells first, each in config order.
+-- A stance ticked before a spell that can't be cast in it is left out, keeping its setting.
 local function racialsOn(macro, side)
     local on = {}
     local set = smb.offersUseItems(macro) and settings(RACIAL_SETTING[side])[settingKey(macro)]
     if not set then return on end
     for _, racial in ipairs(castLineSpells(macro)) do
-        if set[racial] then on[#on + 1] = racial end
+        if set[racial] and fitsSide(macro, racial, side) then on[#on + 1] = racial end
     end
     return on
 end
@@ -587,6 +591,12 @@ function smb.formNames()
     return names
 end
 
+-- What the class config's forms are called in the menus: "Stance" for a stance-using class (Warriors),
+-- else "Form".
+function smb.formNoun()
+    return classConfig().hasStances and "Stance" or "Form"
+end
+
 -- The section a form's submenu lists first: the form config's section, else the one named after the form.
 function smb.formSection(form)
     for _, entry in ipairs(classConfig().forms) do
@@ -616,8 +626,20 @@ end
 
 -- Whether a page macro's spell can be cast in a form (a form's name from the class config): not when it sits
 -- in a section named after another form, so Cat offers no Bear spells, Bear no Cat spells, and Caster neither.
+-- A spell that needs a stance (Warriors) is only allowed in a form whose spells include one of its stances,
+-- so Battle offers no Whirlwind.
 function smb.formAllows(form, other)
-    return other.category == form or not tContains(smb.formNames(), other.category)
+    if other.category ~= form and tContains(smb.formNames(), other.category) then return false end
+    if not other.stances then return true end
+    for _, entry in ipairs(classConfig().forms) do
+        if entry.name == form then
+            for _, spell in ipairs(entry.spells or NO_SLOTS) do
+                if tContains(other.stances, spell) then return true end
+            end
+            return false
+        end
+    end
+    return true
 end
 
 -- Whether a macro has a spell set for any form.
@@ -840,15 +862,9 @@ local function stanceSlot(stance)
     return WARRIOR_STANCE_SLOTS[stance]
 end
 
--- A line switching to the first of a spell's stances unless already in one of them, e.g.
--- "/cast [nostance:1/3] Battle Stance\n", or "" when the first stance's slot is unknown.
-local function stanceLine(stances)
-    if not stanceSlot(stances[1]) then return "" end
-    local slots = {}
-    for _, stance in ipairs(stances) do
-        slots[#slots + 1] = stanceSlot(stance)
-    end
-    return "/cast [nostance:" .. table.concat(slots, "/") .. "] " .. stances[1] .. "\n"
+-- Whether a spell is one of a stance-using class's (Warriors') stances.
+function smb.isStance(name)
+    return classConfig().hasStances and stanceSlot(name) ~= nil
 end
 
 -- A form's macro condition: "noform" for one with no spells (caster form), else "form:n" for the slot of its
@@ -863,18 +879,25 @@ local function formCondition(form)
     end
 end
 
--- The clauses that cast a macro's form spells, each followed by "; ", ready to go after its modifier
--- clauses, e.g. "[form:3] Shred; [form:1,@mouseover,harm,nodead][form:1] Faerie Fire (Feral); ", or "". Each
--- spell is cast the way its own page macro targets, like a modifier spell. A pick that isn't learned, whose
+-- The form picks a macro casts, as {condition, page macro}, in config order. A pick that isn't learned, whose
 -- form isn't, or that the form doesn't allow (see smb.formAllows), is left out, keeping its setting.
-local function formClauses(macro)
-    if not smb.offersForms(macro) then return "" end
-    local clauses = {}
+local function formPicks(macro)
+    local picks = {}
+    if not smb.offersForms(macro) then return picks end
     for _, form in ipairs(classConfig().forms) do
         local other = smb.macroByName[smb.formSpell(macro, form.name) or ""]
         local condition = other and not other.unlearned and smb.formAllows(form.name, other) and formCondition(form)
-        if condition then clauses[#clauses + 1] = targetedClause(condition, other) end
+        if condition then picks[#picks + 1] = {condition, other} end
     end
+    return picks
+end
+
+-- The clauses that cast a macro's form spells, each followed by "; ", ready to go after its modifier
+-- clauses, e.g. "[form:3] Shred; [form:1,@mouseover,harm,nodead][form:1] Faerie Fire (Feral); ", or "". Each
+-- spell is cast the way its own page macro targets, like a modifier spell.
+local function formClauses(macro)
+    local clauses = {}
+    for _, pick in ipairs(formPicks(macro)) do clauses[#clauses + 1] = targetedClause(pick[1], pick[2]) end
     return table.concat(clauses)
 end
 
@@ -943,9 +966,9 @@ local function tooltipStances(id)
     end
 end
 
--- The stances a spell can be cast in, the one to switch to first, or nil for a spell that needs none. The
--- tooltip says which stances, so the list matches this client's rules; the class config's list fills in
--- when the tooltip names none, and its order picks the stance to switch to.
+-- The stances a spell can be cast in, or nil for a spell that needs none, so the stance picks only offer it
+-- in one of them (see smb.formAllows). The tooltip says which stances, so the list matches this client's
+-- rules; the class config's list fills in when the tooltip names none.
 local function stancesOf(name, id)
     local c = classConfig()
     if not c.hasStances then return nil end
@@ -993,7 +1016,11 @@ local function sideEntries(macro, side, spam)
         local line = placedLine(macro, key, side, spam)
         if line then entries[#entries + 1] = {key, line} end
     end
-    for _, racial in ipairs(racialsOn(macro, side)) do entries[#entries + 1] = {racial, "/cast " .. racial} end
+    for _, racial in ipairs(racialsOn(macro, side)) do
+        -- a stance (an offGcd spell for Warriors) isn't cast while already in it
+        local slot = smb.isStance(racial) and stanceSlot(racial)
+        entries[#entries + 1] = {racial, "/cast " .. (slot and "[nostance:" .. slot .. "] " or "") .. racial}
+    end
     for _, slot in ipairs(smb.useItemSlots(macro, side)) do entries[#entries + 1] = {slot, "/use " .. slot} end
     local rank = {}
     for i, id in ipairs(settings(ORDER_SETTING[side])[settingKey(macro)] or NO_SLOTS) do rank[id] = i end
@@ -1031,21 +1058,19 @@ local function castBody(macro)
     -- press while the spell is channelling (or stealth or the form is on) can't restart (or cancel) it; the before-cast lines come
     -- first, in the order the player ticked them (see sideEntries): the stopCast option stops the current
     -- cast (but, with spam on, not this spell's own channel), the startAttack option starts auto-attack,
-    -- the petAttack option sends the pet at the current target, racials are cast and useItems slots used;
-    -- the stance option then switches stance before the cast. With racials, items, a
-    -- stance or /startattack first, #showtooltip names the spell so the button doesn't show the item or the
-    -- stance. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
+    -- the petAttack option sends the pet at the current target, racials are cast and useItems slots used.
+    -- With racials, items or /startattack first, #showtooltip names the spell so the button doesn't show the
+    -- item. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
     -- stealthed (or channelling, or in the form) no clause matches, and a bare #showtooltip would show a question mark
     local spam = smb.isOptionOn(macro, "spam") and macro.spam or nil
     -- a toggle spell's spam option renames the cast (see smb.castName) rather than adding a condition
     local name = smb.castName(macro)
     local noToggle = spam == NO_TOGGLE
     if noToggle then spam = nil end
-    local stance = smb.isOptionOn(macro, "stance") and stanceLine(macro.stances) or ""
     -- the modifier spells' clauses go first, so a held key wins over the form spells, and those over the
     -- macro's own
     local mods = modifierClauses(macro) .. formClauses(macro)
-    local namesSpell = stance ~= "" or noToggle or (spam ~= nil and mods == "")
+    local namesSpell = noToggle or (spam ~= nil and mods == "")
     local before = {}
     for _, entry in ipairs(sideEntries(macro, "before", spam)) do
         before[#before + 1] = entry[2] .. "\n"
@@ -1055,7 +1080,7 @@ local function castBody(macro)
             namesSpell = true
         end
     end
-    local header = "#showtooltip" .. (namesSpell and " " .. macro.name or "") .. "\n" .. table.concat(before) .. stance
+    local header = "#showtooltip" .. (namesSpell and " " .. macro.name or "") .. "\n" .. table.concat(before)
     -- with a sequence, every step is cast like the macro's own spell
     local steps = sequenceSteps(macro)
     if steps then steps[1] = name end
@@ -1152,13 +1177,14 @@ smb.macros = {}
 -- The condition a spell's spam option adds to its casts, or nil for spells without one. Stealth toggles
 -- off when cast again, so a stealth spell casts only while not stealthed. For a class with forms (Druids),
 -- a shapeshift spell on the stance bar casts only while not in that form, since casting it again shifts
--- back out. A toggle spell, such as Auto Shot or an aspect, gets NO_TOGGLE: it toggles off when cast again.
+-- back out. A Warrior stance gets none: casting it again does nothing. A toggle spell, such as Auto Shot or
+-- an aspect, gets NO_TOGGLE: it toggles off when cast again.
 local function spamCondition(name)
     local c = classConfig()
     if c.isToggleSpell(name) then return NO_TOGGLE end
     if c.isStealthSpell(name) then return "nostealth" end
     if c.isChanneledSpell(name) then return "nochanneling:" .. name end
-    local slot = c.forms[1] and stanceSlot(name)
+    local slot = c.forms[1] and not c.hasStances and stanceSlot(name)
     if slot then return "noform:" .. slot end
 end
 
@@ -1763,7 +1789,7 @@ function smb.isOnActionBars(macro, bars)
     return smb.countsSpellsOnBars() or macro.body == bareBody(macro.name)
 end
 
--- Flips a setting ("mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet","raidRank1", "spam", "stance", "petAttack",
+-- Flips a setting ("mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet","raidRank1", "spam", "petAttack",
 -- "stopCast" or "startAttack", or "equipStopAttack" or "equipStopCast" on an equipment macro) and rewrites
 -- the macro if it already exists. In combat the rewrite waits until the next pickup. The focus, enemyPlayer, nearest and combatRank1 settings add or remove a page entry, and mouseover and cursor change the macros that
 -- cast this spell with a modifier key, so the page must be rebuilt after any of them. Turning focus off also clears
@@ -1919,7 +1945,7 @@ end
 
 -- The settings a spell macro stores under its settingKey, and an equipment macro under its slot.
 local SPELL_SETTINGS = {
-    "mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam", "stance",
+    "mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam",
     "petAttack", "stopCast", "startAttack", "startAttackBefore", "petAttackAfter", "autoShotBefore",
     "autoShotAfter", "petFollowBefore", "petFollowAfter",
     "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
