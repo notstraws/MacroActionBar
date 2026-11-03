@@ -26,12 +26,12 @@ read_globals = {
 	"GetMacroIndexByName", "GetMacroInfo", "GetNumMacros", "GetNumShapeshiftForms",
 	"GetNumSpellTabs", "GetNumTrainerServices", "GetShapeshiftFormInfo", "GetSpellBookItemInfo",
 	"GetSpellBookItemName", "GetSpellBookItemTexture", "GetSpellTabInfo", "GetSpellTexture",
-	"GetTrainerServiceLevelReq", "InCombatLockdown",
+	"GetCursorPosition", "GetTrainerServiceLevelReq", "HideUIPanel", "InCombatLockdown", "InterfaceOptions_AddCategory",
 	"IsAltKeyDown", "IsHarmfulSpell", "IsPassiveSpell", "IsTradeskillTrainer", "LibStub", "PickupMacro", "PlaceAction", "PlaySound", "RunNextFrame",
-	"SpellHasRange", "tinsert",
+	"SpellHasRange", "tinsert", "ToggleSpellBook",
 	"UnitClass", "UnitFactionGroup", "UnitRace",
 
 	-- Frames / objects / constants
-	"GameTooltip", "PlayerSpellsFrame", "UIErrorsFrame", "UIParent", "UISpecialFrames", "WorldFrame",
+	"GameTooltip", "Minimap", "PlayerSpellsFrame", "PlayerSpellsUtil", "Settings", "UIErrorsFrame", "UIParent", "UISpecialFrames", "WorldFrame",
 	"BOOKTYPE_SPELL", "ERR_NOT_IN_COMBAT", "ITEM_SPELL_TRIGGER_ONUSE", "MAX_ACCOUNT_MACROS", "MAX_CHARACTER_MACROS", "OKAY", "SOUNDKIT",
 }
