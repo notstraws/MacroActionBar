@@ -31,11 +31,11 @@ local _, smb = ...
 -- raidRank1: spells that offer "Downrank In Raids" (right-click a macro): the macro casts the spell's rank 1
 --   while you are in a raid group and its highest rank otherwise.
 --
--- channeled: channelled spells that offer "Spammable" (right-click a macro): the cast gets a
---   [nochanneling:<spell>] condition, so pressing the macro again while the spell is channelling does
+-- channeled: channelled spells that offer "Don't Recast While Channeling" (right-click a macro): the cast
+--   gets a [nochanneling:<spell>] condition, so pressing the macro again while the spell is channelling does
 --   nothing and you can spam the button.
 --
--- stealth: stealth spells that offer "Spammable" (right-click a macro): the cast gets a [nostealth]
+-- stealth: stealth spells that offer "Stay In Stealth On Recast" (right-click a macro): the cast gets a [nostealth]
 --   condition, so pressing the macro again while stealthed doesn't take you out of stealth.
 --
 -- cooldowns: spells such as Rage of the Farseer that offer the "Sequence" menu (see Cast sequences below)

@@ -72,7 +72,9 @@ local function showMacroMenu(button)
             -- a sequence can't downrank (see castBody in Macros.lua)
             addOption("Downrank In Raids", "raidRank1"):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
         end
-        if macro.spam then addOption("Spammable", "spam") end
+        if macro.spam then
+            addOption(macro.spam == "nostealth" and "Stay In Stealth On Recast" or "Don't Recast While Channeling", "spam")
+        end
         if macro.stances then addOption("Switch To " .. macro.stances[1], "stance") end
         if macro.target then addOption("Cast On Focus", "focus") end
         if smb.offersPetAttack(macro) then addOption("Enable Pet Attack", "petAttack") end
@@ -495,7 +497,7 @@ function setMacro(button, macro, bars)
         button.subText:SetText("Raid R1")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "spam") then
-        button.subText:SetText("Spammable")
+        button.subText:SetText(macro.spam == "nostealth" and "Stay stealthed" or "No recast")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     else
         button.subText:SetText(smb.hasCastOptions(macro) and "Macro" or "Self")
