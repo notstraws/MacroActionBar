@@ -463,9 +463,22 @@ local function framePool(create)
     return pool
 end
 
--- Splits the macros into page halves of {header = text, y} and {macro, column, y} entries. A category
--- flows top to bottom and repeats its header when it carries over to the next half.
-local function paginate(height, headerHeight, columns)
+-- A macro matches the search when its name or section contains the (lowercased) filter; no filter matches all.
+local function matches(macro, filter)
+    if not filter or filter == "" then return true end
+    return macro.name:lower():find(filter, 1, true) ~= nil
+        or (macro.category or ""):lower():find(filter, 1, true) ~= nil
+end
+
+-- Splits the macros matching filter into page halves of {header = text, y} and {macro, column, y} entries. A
+-- category flows top to bottom and repeats its header when it carries over to the next half. Returns no
+-- halves when nothing matches.
+local function paginate(height, headerHeight, columns, filter)
+    local shown = {}
+    for _, macro in ipairs(smb.macros) do
+        if matches(macro, filter) then shown[#shown + 1] = macro end
+    end
+    if #shown == 0 then return {} end
     local halves, half, y = {}, nil, 0
     local function newHalf()
         half, y = {}, 0
@@ -477,7 +490,7 @@ local function paginate(height, headerHeight, columns)
     end
     newHalf()
     local category, column
-    for _, macro in ipairs(smb.macros) do
+    for _, macro in ipairs(shown) do
         if macro.category ~= category then
             category, column = macro.category, 0
             if y > 0 then
@@ -521,11 +534,16 @@ local function layout(page)
     page.footer:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", origins[1] + 8, FOOTER_BOTTOM)
     -- stops short of the paging arrows, wrapping upward when the page is narrow
     page.footer:SetWidth(spread == 2 and viewWidth - 16 or viewWidth - 180)
-    if #smb.macros == 0 then
+    local headerHeight = math.max(page.headers:Acquire():GetHeight(), 30) + 8
+    page.headers:ReleaseAll()
+
+    local halves = paginate(height + VIEW_TOP - VIEW_BOTTOM, headerHeight, columns, page.filter)
+    if #halves == 0 then
         local header = page.headers:Acquire()
         header:SetPoint("TOPLEFT", page, "TOPLEFT", origins[1], VIEW_TOP)
         setHeader(header, "Macro Spellbook", viewWidth)
-        page.empty:SetText("No macros found.")
+        page.empty:SetText(#smb.macros == 0 and "No macros found."
+            or "No macros match \"" .. page.search:GetText() .. "\".")
         page.empty:ClearAllPoints()
         page.empty:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 8, -12)
         page.empty:Show()
@@ -533,11 +551,6 @@ local function layout(page)
         return
     end
     page.empty:Hide()
-
-    local headerHeight = math.max(page.headers:Acquire():GetHeight(), 30) + 8
-    page.headers:ReleaseAll()
-
-    local halves = paginate(height + VIEW_TOP - VIEW_BOTTOM, headerHeight, columns)
     local maxPages = math.ceil(#halves / spread)
     page.paging = true
     controls:SetMaxPages(maxPages)
@@ -630,6 +643,43 @@ local function buildPage(page)
                 refresh(page) -- rewrites the macros that follow the default
             end)
         end
+    end)
+
+    -- a search box laid over the native one, which only searches spells; it filters the page by macro or
+    -- section name. Covering the native box also keeps it from taking focus, which would close the page
+    local search = CreateFrame("EditBox", nil, page.header, "SearchBoxTemplate")
+    page.search = search
+    search:SetAutoFocus(false)
+    -- no "Search" placeholder; the template reshows the font string as the text empties, so blank it instead
+    if search.Instructions then search.Instructions:SetText("") end
+    local nativeSearch = PlayerSpellsFrame.SpellBookFrame.SearchBox
+    if nativeSearch then
+        search:SetAllPoints(nativeSearch)
+        -- the native box's text and art show through ours, so fade it out while the page is open; its text
+        -- and search are left alone for when the player goes back to a native tab
+        page:HookScript("OnShow", function()
+            page.nativeSearchAlpha = page.nativeSearchAlpha or nativeSearch:GetAlpha()
+            nativeSearch:SetAlpha(0)
+        end)
+        page:HookScript("OnHide", function()
+            nativeSearch:SetAlpha(page.nativeSearchAlpha or 1)
+            page.nativeSearchAlpha = nil
+        end)
+    else
+        search:SetSize(200, 20)
+        search:SetPoint("RIGHT", options, "LEFT", -10, 0)
+    end
+    search:HookScript("OnHide", function(self) self:ClearFocus() end)
+    search:HookScript("OnTextChanged", function(self)
+        local filter = self:GetText():lower():match("^%s*(.-)%s*$")
+        if filter == (page.filter or "") then return end
+        page.filter = filter
+        if page.pagingControls.SetCurrentPage then
+            page.paging = true
+            page.pagingControls:SetCurrentPage(1)
+            page.paging = false
+        end
+        layout(page)
     end)
 
     -- the native page's "Page 1/2" arrows, bottom right of the book
