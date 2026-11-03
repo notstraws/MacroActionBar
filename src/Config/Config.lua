@@ -116,7 +116,10 @@ local _, smb = ...
 --   yourself. Warriors, Hunters and Rogues get "Start Attack" and "Start attack after spell cast" instead,
 --   for /startattack (the cog's default is the after line), plus "Stop Attack" on either side for /stopattack. Druids, Paladins and Shamans, being hybrids,
 --   get both. Mages who have learned Ice Block also get "Cancel Ice Block", in the Before Casting menu only,
---   for /cancelaura Ice Block, so the spell isn't blocked while Ice Block is on.
+--   for /cancelaura Ice Block, so the spell isn't blocked while Ice Block is on. Every mouseoverEnemy spell
+--   (damaging spells) also offers, in the Before Casting menu only, "Clear Dead Target" for /cleartarget [dead],
+--   dropping a dead target, and "Target Nearest Enemy" for /targetenemy [noharm][dead], targeting the nearest
+--   enemy when you have no live hostile target. Its focus and enemy player macros offer neither.
 --
 --   Both menus also list your equipped items with a "Use:" effect, e.g. engineering gloves and trinkets.
 --   Tick several to stack them: the macro uses each one, in the order you ticked them, on that side of the
