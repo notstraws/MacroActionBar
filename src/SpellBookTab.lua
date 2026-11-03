@@ -52,11 +52,11 @@ local function menuOrder(sections, first)
 end
 
 -- Every spell macro has a menu; custom macros don't. A focus copy's menu only removes it; a nearest copy's
--- also offers its own sequence.
+-- also offers its own sequence. Every other menu ends with Reset To Default.
 local function showMacroMenu(button)
     local macro = button.macro
     if not smb.hasOptions(macro) then return end
-    MenuUtil.CreateContextMenu(button, function(_, rootDescription)
+    local function addOptions(rootDescription)
         -- an equipment macro's menu is titled by its one section instead
         if not macro.equipment then rootDescription:CreateTitle(macro.name) end
         local function addOption(label, key)
@@ -308,6 +308,16 @@ local function showMacroMenu(button)
                     function() pick(current) end)
             end
         end
+    end
+    MenuUtil.CreateContextMenu(button, function(_, rootDescription)
+        addOptions(rootDescription)
+        -- at the bottom of every menu but a copy's, greyed out while nothing differs from the defaults
+        if not smb.offersReset(macro) then return end
+        rootDescription:CreateDivider()
+        rootDescription:CreateButton("Reset To Default", function()
+            smb.resetMacro(macro)
+            refresh(button:GetParent()) -- removes the focus and nearest copies, and rewrites the subtext
+        end):SetEnabled(function() return smb.hasCustomSettings(macro) end)
     end)
 end
 
@@ -362,17 +372,44 @@ local function setAtlasOr(texture, atlas, file, scale, icon)
     return false
 end
 
--- Shows a page button's tooltip: the game's own tooltip for the spell or item while Alt is held, otherwise
--- the macro's.
+local BODY_WRAP = 40 -- characters per tooltip line for a macro body
+
+-- Adds a macro body to GameTooltip, one line per body line. A long line is broken after a space, ")", ";"
+-- or ",", since the tooltip's own wrapping spaces out a long line with few spaces badly.
+local function addBodyLines(body)
+    for line in (body .. "\n"):gmatch("(.-)\n") do
+        while #line > BODY_WRAP do
+            local cut = BODY_WRAP
+            for i = BODY_WRAP, 1, -1 do
+                if line:sub(i, i):find("[%s%);,]") then
+                    cut = i
+                    break
+                end
+            end
+            GameTooltip:AddLine(line:sub(1, cut), 1, 1, 1)
+            line = line:sub(cut + 1):gsub("^%s+", "")
+        end
+        GameTooltip:AddLine(line, 1, 1, 1)
+    end
+end
+
+-- Shows a page button's tooltip: while Alt is held, a custom macro's description or else the game's own
+-- tooltip for the spell or item, otherwise the macro's.
 local function showTooltip(button)
     local macro = button.macro
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    if IsAltKeyDown() and macro.description then
+        GameTooltip:SetText(macro.name)
+        GameTooltip:AddLine(macro.description, 1, 1, 1, true)
+        GameTooltip:Show()
+        return
+    end
     if IsAltKeyDown() and smb.setGameTooltip(macro) then
         GameTooltip:Show()
         return
     end
     GameTooltip:SetText(macro.name)
-    GameTooltip:AddLine(macro.body, 1, 1, 1, true)
+    addBodyLines(macro.body)
     if macro.tooLong then
         GameTooltip:AddLine("Too long: " .. #macro.body .. "/255 characters. Turn off some options.",
             1, 0.1, 0.1, true)
@@ -387,7 +424,9 @@ local function showTooltip(button)
         GameTooltip:AddLine("Right-click for options.", 0.5, 0.5, 0.5, true)
     end
     local kind = smb.gameTooltipKind(macro)
-    if kind then
+    if macro.description then
+        GameTooltip:AddLine("Hold Alt for the description.", 0.5, 0.5, 0.5, true)
+    elseif kind then
         GameTooltip:AddLine("Hold Alt for the " .. kind .. "'s tooltip.", 0.5, 0.5, 0.5, true)
     end
     GameTooltip:Show()
@@ -535,7 +574,7 @@ function setMacro(button, macro, bars)
         button.subText:SetText("Forms")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasModifierOn(macro) then
-        button.subText:SetText("Modifiers")
+        button.subText:SetText("Has Modifiers")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.useItemSlots(macro, "before")[1] or smb.useItemSlots(macro, "after")[1] then
         button.subText:SetText("Use items")

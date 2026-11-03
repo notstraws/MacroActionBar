@@ -119,5 +119,12 @@ smb.classConfigs.HUNTER = {
         982, -- Revive Pet
     },
 
-    custom = {},
+    custom = {
+        -- turns on the Track spell for the target's creature type; does nothing with no target
+        { name = "One Button Tracking", category = "Tracking", first = true, icon = "Interface\\Icons\\Ability_Tracking",
+          description = "Tracks your target's creature type, e.g. Track Beasts on a beast. Does nothing with no target.",
+          body = "/run local c=UnitCreatureType(\"target\")if c then for i=1,C_Minimap.GetNumTrackingTypes()do "
+              .. "local t=C_Minimap.GetTrackingInfo(i)if t and t.name:find(c,1,true)then "
+              .. "C_Minimap.SetTracking(i,true)break end end end" },
+    },
 }
