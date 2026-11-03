@@ -14,7 +14,7 @@ local _, smb = ...
 --   in alphabetical order. Add noGlow = true to a section, e.g. { name = "Auras", noGlow = true, spells =
 --   { ... } }, to stop its spells glowing when they aren't on your action bars. Add sequence = true to a
 --   section to let its spells cast in sequence (see Cast sequences below). Add cooldownSteps = true to a
---   section, e.g. Damage or Healing, to offer its spells only in cooldown spells' sequences. Add
+--   section, e.g. Damage or Healing, to offer its spells in cooldown spells' "Then Cast" menus. Add
 --   menuLast = true to a section to list it last in the right-click submenus, e.g. Druids' Forms.
 --
 -- mouseoverEnemy / mouseoverFriend: spells that offer "Cast On Mouseover" (right-click a macro), cast on a
@@ -25,16 +25,31 @@ local _, smb = ...
 --   right after it, that casts on your focus target (or your target when you have no hostile / friendly
 --   focus).
 --
+-- dispels: spells that offer "Cast On Enemy Player" (right-click a macro): the page then also lists a second
+--   macro for the spell, right after it (and its focus macro), that targets the nearest enemy player, casts
+--   the spell on them, then switches back to your previous target, like the focus macro. With no enemy
+--   player near it casts nothing, so it never lands on an NPC you had targeted.
+--
 -- buffs: spells that offer "Cast On Nearest Player" (right-click a macro): the page then also lists a second
---   macro for the spell, right after it (and its focus macro), that targets the nearest friendly player,
---   casts the spell on them (or on you when no friendly player is near), leaving them as your target. It
---   never casts on an NPC. In a sequence = true section, that macro has its own "Sequence" menu (see Cast
---   sequences below), separate from the spell's, e.g. Mark of the Wild then Thorns on the nearest player.--
+--   macro for the spell, right after it (and its focus and enemy player macros), that targets the nearest
+--   friendly player, casts the spell on them (or on you when no friendly player is near), leaving them as
+--   your target. It never casts on an NPC.
+--
+--   Each of these second macros (focus, enemy player, nearest) has its own right-click options, separate
+--   from the spell's: Before Casting, After Casting, Sequence (see Cast sequences below), and the rest, e.g.
+--   Mark of the Wild then Thorns on the nearest player while the spell's own macro casts just Mark of the Wild.
+--
 -- cursor: ground-targeted spells that offer "Cast At Cursor" (right-click a macro): the spell lands where
 --   the cursor points, with no targeting circle to click.
 --
 -- raidRank1: spells that offer "Downrank In Raids" (right-click a macro): the macro casts the spell's rank 1
 --   while you are in a raid group and its highest rank otherwise.
+--
+-- combatRank1: spells that offer "Rank 1 Out Of Combat" (right-click a macro): the page then also lists a second
+--   macro for the spell, right after it (and its other second macros), that casts the spell's rank 1 while you
+--   are out of combat and its highest rank in combat, e.g. a cheap Arcane Explosion to pull a group. Like the
+--   other second macros it has its own right-click options, and it offers "Cast On Mouseover" and "Cast At
+--   Cursor" like the spell's own macro. It has no Sequence, "Downrank In Raids" or modifier keys.
 --
 -- channeled: channelled spells that offer "Don't Recast While Channeling" (right-click a macro): the cast
 --   gets a [nochanneling:<spell>] condition, so pressing the macro again while the spell is channelling does
@@ -48,10 +63,16 @@ local _, smb = ...
 --   doesn't turn it off and you can spam the button. Picked for a modifier key on another macro, the
 --   spell is always cast as "!<spell>".
 --
--- cooldowns: spells such as Rage of the Farseer that offer the "Sequence" menu (see Cast sequences below)
---   in whatever section they are. Their menu also lists the spells in cooldownSteps = true sections, so the
---   cooldown can be followed by damage or healing spells, e.g. Lightning Bolt. To use a trinket with it,
---   tick the trinket in the macro's Before Casting menu.
+-- cooldowns: spells such as Combustion that offer the "Then Cast" menu (right-click a macro) in whatever
+--   section they are, instead of a sequence. Pick one learned spell from a sequence = true or cooldownSteps =
+--   true section or from Unsorted, e.g. Fireball: the macro casts it on the same press, right after the cooldown, the way that
+--   spell's own macro targets (see Modifier keys below). The second cast only goes off when the cooldown
+--   doesn't trigger the global cooldown. To use a trinket with it, tick the trinket in the macro's Before
+--   Casting menu.
+--
+-- offGcd: spells that don't trigger the global cooldown, such as Presence of Mind, offered in every other
+--   spell macro's Before Casting and After Casting menus (right-click a macro) once learned: ticked, the
+--   macro casts it on that side of the cast, on the same press, e.g. Presence of Mind then Pyroblast.
 --
 -- stances: spells that offer "Switch To <stance>" (right-click a macro), as
 --   { ["Hamstring"] = { "Battle Stance", "Berserker Stance" }, ... }: the stances the spell can be cast in.
@@ -80,24 +101,27 @@ local _, smb = ...
 --   does nothing instead of shifting you out, and you can spam the button.
 --
 -- Pet attack is not set here: Hunters and Warlocks get it automatically. Every mouseoverEnemy spell then
---   offers "Enable Pet Attack" (right-click a macro): the macro starts with /petattack, sending your pet
---   at your target. The settings cog's "Enable Pet attacks before spell cast" turns it on for every such
---   macro you haven't switched yourself.
+--   offers "Pet Attack" in its Before Casting and After Casting menus (right-click a macro): the macro
+--   adds /petattack on that side of the cast, sending your pet at your target. The settings cog's
+--   "Enable Pet attacks before spell cast" turns on the before line for every such macro you haven't
+--   switched yourself. Every spell macro's Before Casting and After Casting menus also
+--   offer "Pet Follow", for /petfollow, calling your pet back to you.
 --
 -- Stop casting, starting attack and using items aren't set here either: right-click a macro for its
 --   "Before Casting" and "After Casting" menus, where you tick what the macro does on that side of the cast.
 --   "Stop Casting", in the Before Casting menu only, adds /stopcasting to cancel your current cast. The settings cog's
 --   "Stop casting before spell cast" turns on the before line for every spell macro you haven't switched
 --   yourself. Warriors, Hunters and Rogues get "Start Attack" and "Start attack after spell cast" instead,
---   for /startattack (the cog's default is the after line). Druids, Paladins and Shamans, being hybrids,
---   get both.
+--   for /startattack (the cog's default is the after line), plus "Stop Attack" on either side for /stopattack. Druids, Paladins and Shamans, being hybrids,
+--   get both. Mages who have learned Ice Block also get "Cancel Ice Block", in the Before Casting menu only,
+--   for /cancelaura Ice Block, so the spell isn't blocked while Ice Block is on.
 --
 --   Both menus also list your equipped items with a "Use:" effect, e.g. engineering gloves and trinkets.
 --   Tick several to stack them: the macro uses each one, in the order you ticked them, on that side of the
 --   cast. The macro uses the slot, not the item, so it keeps working when you swap a trinket.
 --
 --   Both menus also list your race's racials from smb.racials below, once learned, e.g. Blood Fury for
---   Orcs: ticked, the macro casts it on that side of the cast.
+--   Orcs: ticked, the macro casts it on that side of the cast. The offGcd spells above are listed the same way.
 --
 --   An Equipment section macro's right-click menu lists "Stop Attacking" and "Stop Casting" under a
 --   "Before Using" heading: ticked, the macro starts with /stopattack or /stopcasting before using the item. They are per slot and
@@ -116,9 +140,9 @@ local _, smb = ...
 --   you. Focus copies don't use modifiers. A macro can be at most 255 characters: one that grows past it
 --   says so in its tooltip and can't be placed until you turn something off.
 --
--- Cast sequences: right-click a spell macro in a section with sequence = true, or a cooldowns spell, for its
---   "Sequence" menu, where you tick other learned spells from sequence = true sections (and, for a cooldown,
---   cooldownSteps = true sections) in the order the macro should cast them after its own spell: each press casts the next one (/castsequence). The sequence starts over from its first spell
+-- Cast sequences: right-click a spell macro in a section with sequence = true (but not a cooldowns spell) for
+--   its "Sequence" menu, where you tick other learned spells from sequence = true sections in the order the
+--   macro should cast them after its own spell: each press casts the next one (/castsequence). The sequence starts over from its first spell
 --   after 2 seconds without a press. Every step is cast the way the macro's own spell is, e.g. on the
 --   mouseover target with "Cast On Mouseover" on. "Downrank In Raids" is off while a sequence is set, and a
 --   macro that casts its pet's ability has no sequence.

@@ -51,8 +51,8 @@ local function menuOrder(sections, first)
     return ordered
 end
 
--- Every spell macro has a menu; custom macros don't. A focus copy's menu only removes it; a nearest copy's
--- also offers its own sequence. Every other menu ends with Reset To Default.
+-- Every spell macro has a menu; custom macros don't. A focus, enemy player, nearest or combat rank copy's menu has its own
+-- options, apart from its spell's. Every menu ends with Reset To Default.
 local function showMacroMenu(button)
     local macro = button.macro
     if not smb.hasOptions(macro) then return end
@@ -114,15 +114,39 @@ local function showMacroMenu(button)
                 if not listed[name] then addPick(name, " (unavailable)") end
             end
         end
-        if macro.focus then
-            addOption("Cast On Focus", "focus")
-            return
-        end
-        -- a nearest copy has its own sequence (see sequenceKey in Macros.lua)
-        if macro.nearest then
-            addOption("Cast On Nearest Player", "nearest")
-            addSequenceMenu()
-            return
+        -- the Then Cast submenu of a cooldown spell: the one spell cast right after its own, from the ones
+        -- smb.canFollowUp allows (Unsorted included), under their section's title
+        local function addFollowUpMenu()
+            if not smb.offersFollowUp(macro) then return end
+            local picked = smb.followUpSpell(macro)
+            local submenu = rootDescription:CreateButton("Then Cast: " .. (picked or "None"))
+            submenu:CreateTitle("Cast Right After (same press)")
+            local function addPick(label, name)
+                submenu:CreateRadio(label,
+                    function() return smb.followUpSpell(macro) == name end,
+                    function()
+                        smb.setFollowUpSpell(macro, name)
+                        refresh(button:GetParent()) -- rewrites the macro, its focus copy and its subtext
+                    end)
+            end
+            addPick("None", nil)
+            -- the menuLast sections (see smb.menuLast) go after the rest
+            local listed, section = false, nil
+            for _, lastPass in ipairs({false, true}) do
+                for _, other in ipairs(smb.macros) do
+                    if smb.macroByName[other.name] == other and smb.canFollowUp(macro, other)
+                        and smb.menuLast(other.category) == lastPass then
+                        if other.category ~= section then
+                            section = other.category
+                            submenu:CreateTitle(sectionLabel(section))
+                        end
+                        if other.name == picked then listed = true end
+                        addPick(other.name, other.name)
+                    end
+                end
+            end
+            -- a pick no longer learned or moved out of its section stays listed, so it can be changed back
+            if picked and not listed then addPick(picked .. " (unavailable)", picked) end
         end
         if macro.equipment then
             rootDescription:CreateTitle("Before Using")
@@ -130,23 +154,41 @@ local function showMacroMenu(button)
             addOption("Stop Casting", "equipStopCast")
             return
         end
-        if macro.target then addOption("Cast On Mouseover", "mouseover") end
-        if macro.cursor then addOption("Cast At Cursor", "cursor") end
-        if macro.petAbility then addOption("Cast " .. macro.petAbility .. " If Summoned", "pet") end
+        -- a copy has its own options (see settingKey in Macros.lua), led by the one that removes it, but
+        -- casts on its fixed target (a combat rank copy keeps its spell's targeting) and offers no copies of its own
+        local isCopy = macro.focus or macro.enemyPlayer or macro.nearest or macro.combatCopy
+        if macro.focus then
+            addOption("Cast On Focus", "focus")
+        elseif macro.enemyPlayer then
+            addOption("Cast On Enemy Player", "enemyPlayer")
+        elseif macro.nearest then
+            addOption("Cast On Nearest Player", "nearest")
+        elseif macro.combatCopy then
+            addOption("Rank 1 Out Of Combat", "combatRank1")
+            if macro.target then addOption("Cast On Mouseover", "mouseover") end
+            if macro.cursor then addOption("Cast At Cursor", "cursor") end
+        else
+            if macro.target then addOption("Cast On Mouseover", "mouseover") end
+            if macro.cursor then addOption("Cast At Cursor", "cursor") end
+            if macro.petAbility then addOption("Cast " .. macro.petAbility .. " If Summoned", "pet") end
+        end
         if macro.raidRank1 then
             -- a sequence can't downrank (see castBody in Macros.lua)
             addOption("Downrank In Raids", "raidRank1"):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
         end
-        -- "Don't Toggle Off On Recast" (Auto Shot) sits below Enable Pet Attack instead
+        -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Nearest Player instead
         local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
         if macro.spam and not noToggle then addOption(spamLabels(macro)[1], "spam") end
         if macro.stances then addOption("Switch To " .. macro.stances[1], "stance") end
-        if macro.target then addOption("Cast On Focus", "focus") end
-        if macro.buff then addOption("Cast On Nearest Player", "nearest") end
-        if smb.offersPetAttack(macro) then addOption("Enable Pet Attack", "petAttack") end
+        if not isCopy then
+            if macro.target then addOption("Cast On Focus", "focus") end
+            if macro.dispel then addOption("Cast On Enemy Player", "enemyPlayer") end
+            if macro.buff then addOption("Cast On Nearest Player", "nearest") end
+            if macro.combatRank1 then addOption("Rank 1 Out Of Combat", "combatRank1") end
+        end
         if noToggle then addOption(spamLabels(macro)[1], "spam") end
-        -- one submenu per side of the cast: /startattack, /cast !Auto Shot, the race's racials and the equipped
-        -- on-use items, each on either side, both or neither, and /stopcasting before only
+        -- one submenu per side of the cast: /cast !Auto Shot, /startattack, /stopattack, /petattack, /petfollow, the offGcd spells, the race's racials and the equipped
+        -- on-use items, each on either side, both or neither, and /stopcasting and /cancelaura Ice Block before only
         local function addSide(side)
             -- each line as {label, id, isOn, toggle}, the id naming it for smb.sidePosition
             local lines = {}
@@ -155,10 +197,23 @@ local function showMacroMenu(button)
                     function() return smb.isLineOn(macro, key, side) end,
                     function() smb.toggleLine(macro, key, side) end}
             end
-            if smb.offersStartAttack(macro) then addLine("startAttack", "Start Attack") end
             if smb.offersAutoShot(macro) then addLine("autoShot", "Auto Shot") end
+            if smb.offersStartAttack(macro) then
+                addLine("startAttack", "Start Attack")
+                addLine("stopAttack", "Stop Attack")
+            end
+            if smb.offersPetAttack(macro) then addLine("petAttack", "Pet Attack") end
+            if smb.offersPetFollow(macro) then addLine("petFollow", "Pet Follow") end
             if side == "before" and smb.offersStopCast(macro) then addLine("stopCast", "Stop Casting") end
+            if side == "before" and smb.offersCancelIceBlock(macro) then addLine("cancelIceBlock", "Cancel Ice Block") end
             if smb.offersUseItems(macro) then
+                -- the offGcd spells share the racials' settings (see castLineSpells in Macros.lua)
+                for _, name in ipairs(smb.offeredOffGcd(macro)) do
+                    lines[#lines + 1] = {name, name,
+                        function() return smb.isRacialOn(macro, name, side) end,
+                        function() smb.toggleRacial(macro, name, side) end}
+                end
+                -- the racials go last
                 for _, racial in ipairs(smb.offeredRacials()) do
                     lines[#lines + 1] = {"Racial: " .. racial, racial,
                         function() return smb.isRacialOn(macro, racial, side) end,
@@ -218,6 +273,7 @@ local function showMacroMenu(button)
         addSide("before")
         addSide("after")
         addSequenceMenu()
+        addFollowUpMenu()
         if not smb.offersModifiers(macro) then return end
         -- one submenu per modifier key, picking the spell cast while it is held from the page's learned
         -- spells, grouped by section, as {name, onFocus}. A spell with a focus copy also offers casting it on
@@ -340,7 +396,7 @@ local function showMacroMenu(button)
     end
     MenuUtil.CreateContextMenu(button, function(_, rootDescription)
         addOptions(rootDescription)
-        -- at the bottom of every menu but a copy's, greyed out while nothing differs from the defaults
+        -- at the bottom of every menu, greyed out while nothing differs from the defaults
         if not smb.offersReset(macro) then return end
         rootDescription:CreateDivider()
         rootDescription:CreateButton("Reset To Default", function()
@@ -581,8 +637,14 @@ function setMacro(button, macro, bars)
     elseif macro.focus then
         button.subText:SetText("Focus")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif macro.enemyPlayer then
+        button.subText:SetText("Enemy")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif macro.nearest then
         button.subText:SetText("Nearest")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif macro.combatCopy then
+        button.subText:SetText("OOC R1")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "pet") then
         button.subText:SetText("Pet")
@@ -599,6 +661,9 @@ function setMacro(button, macro, bars)
     elseif smb.hasSequenceOn(macro) then
         button.subText:SetText("Sequence")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif smb.hasFollowUpOn(macro) then
+        button.subText:SetText("Follow-up")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasFormOn(macro) then
         button.subText:SetText("Forms")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
@@ -611,7 +676,10 @@ function setMacro(button, macro, bars)
     elseif smb.hasRacialOn(macro) then
         button.subText:SetText("Racial")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif smb.isOptionOn(macro, "petAttack") then
+    elseif smb.hasOffGcdOn(macro) then
+        button.subText:SetText("Cooldown")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif smb.isLineOn(macro, "petAttack", "before") or smb.isLineOn(macro, "petAttack", "after") then
         button.subText:SetText("Pet attack")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "raidRank1") then

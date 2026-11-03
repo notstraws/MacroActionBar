@@ -124,6 +124,10 @@ smb.classConfigs.DRUID = {
         "Berserk",
     },
 
+    offGcd = {
+        "Nature's Swiftness",
+    },
+
     channeled = {
         "Tranquility",
         "Hurricane",
