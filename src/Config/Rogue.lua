@@ -57,6 +57,8 @@ smb.classConfigs.ROGUE = {
 
     mouseoverFriend = {},
 
+    buffs = {},
+
     cursor = {
         "Distract",
     },

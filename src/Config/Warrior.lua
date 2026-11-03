@@ -66,6 +66,8 @@ smb.classConfigs.WARRIOR = {
 
     mouseoverFriend = {},
 
+    buffs = {},
+
     cursor = {},
 
     cooldowns = {

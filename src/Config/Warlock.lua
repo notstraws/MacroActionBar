@@ -88,6 +88,11 @@ smb.classConfigs.WARLOCK = {
         "Detect Invisibility",
     },
 
+    buffs = {
+        "Unending Breath",
+        "Detect Invisibility",
+    },
+
     cursor = {
         "Rain of Fire",
         "Inferno",

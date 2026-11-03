@@ -25,6 +25,11 @@ local _, smb = ...
 --   right after it, that casts on your focus target (or your target when you have no hostile / friendly
 --   focus).
 --
+-- buffs: spells that offer "Cast On Nearest Player" (right-click a macro): the page then also lists a second
+--   macro for the spell, right after it (and its focus macro), that targets the nearest friendly player,
+--   casts the spell on them (or on you when no friendly player is near), leaving them as your target. It
+--   never casts on an NPC. In a sequence = true section, that macro has its own "Sequence" menu (see Cast
+--   sequences below), separate from the spell's, e.g. Mark of the Wild then Thorns on the nearest player.--
 -- cursor: ground-targeted spells that offer "Cast At Cursor" (right-click a macro): the spell lands where
 --   the cursor points, with no targeting circle to click.
 --

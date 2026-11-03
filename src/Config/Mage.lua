@@ -75,6 +75,12 @@ smb.classConfigs.MAGE = {
         "Slow Fall",
     },
 
+    buffs = {
+        "Arcane Intellect",
+        "Amplify Magic",
+        "Dampen Magic",
+    },
+
     cursor = {
         "Flamestrike",
         "Blizzard",
