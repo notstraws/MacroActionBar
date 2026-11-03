@@ -9,6 +9,7 @@ out together and only one addon page is open at a time.
         name = "My Addon",          -- tooltip
         icon = 134400,              -- texture path or fileID
         iconTexCoords = {0, 1, 0, 1}, -- optional (MINOR 5+): left, right, top, bottom crop of the icon
+        side = true,                -- optional (MINOR 6+): always down the book's right edge, never in the top row
         onCreate = function(page) end, -- build the page's contents; called once, on first open
         onShow = function(page) end,   -- optional
         onHide = function(page) end,   -- optional
@@ -21,10 +22,10 @@ The page covers the book below its top 60px toolbar and clips its children. page
 that toolbar, shows and hides with the page, and doesn't clip, so a page can put its own controls there,
 for example a settings dropdown over the native one at ("TOPRIGHT", -30, -27).
 
-Placement: tabs line up right of the native tabs and skip over tab-sized frames from other addons that sit
-in that row. Tabs that don't fit before the search box stack down the book's right edge. Only frames that
-overlap the next free slot push it along, so an addon that places itself after these tabs can't make them
-leapfrog each other.
+Placement: tabs line up right of the native tabs, after every tab-sized frame from other addons in that row
+(MINOR 6+; before, they took the first free gap), so they always come last. Tabs that don't fit before the
+search box, and tabs registered with side = true, stack down the book's right edge. A frame anchored to one
+of these tabs is ignored, so an addon that places itself after them can't make them leapfrog each other.
 
 Pages from other addons: opening a tab here closes any other addon's page, and clicking another addon's
 launcher closes ours, without either addon knowing the other. To work with this, lay your page over the book
@@ -36,7 +37,7 @@ down the book's right edge.
 Nothing Blizzard owns is written to: everything is layered over the book.
 ]]
 
-local MAJOR, MINOR = "LibSpellBookTabs-1.0", 5
+local MAJOR, MINOR = "LibSpellBookTabs-1.0", 6
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -228,6 +229,14 @@ local function nextFreeColumnSlot(obstacles, y, height, left, right, gap)
     return y
 end
 
+-- a frame placed relative to one of our tabs follows them, so moving past it would only move it again
+local function anchoredToOwned(frame)
+    for i = 1, frame:GetNumPoints() do
+        local _, relativeTo = frame:GetPoint(i)
+        if relativeTo and lib.owned[relativeTo] then return true end
+    end
+end
+
 -- the right edge of the last shown native tab and the gap between native tabs, in screen pixels, so our tabs
 -- continue the native row's spacing (the tab system frame itself runs past its last tab)
 local function nativeRowMetrics(nativeTabs)
@@ -270,17 +279,24 @@ function lib:Layout()
             and rect.top < bookTop + height and rect.bottom > bookBottom
         if (byTabs or byEdge) and not blizzard[rect.frame] then self:HookLauncher(rect.frame) end
     end
+    -- start after the last launcher in the row, so these tabs always come last
     local x = (lastNativeRight or tabsRight) + gap
+    for _, rect in ipairs(obstacles) do
+        if rect.bottom < rowTop and rect.top > rowBottom and rect.left >= x - gap
+            and (not searchLeft or rect.right <= searchLeft) and not anchoredToOwned(rect.frame) then
+            x = math.max(x, rect.right + gap)
+        end
+    end
     local columnTop = tabsTop
     local inRow = true
     for _, tab in ipairs(self.tabs) do
         local button = tab.button
         button:ClearAllPoints()
-        if inRow then
+        if inRow and not tab.side then
             x = nextFreeRowSlot(obstacles, x, width, rowBottom, rowTop, gap)
             if searchLeft and x + width > searchLeft - gap then inRow = false end
         end
-        if inRow then
+        if inRow and not tab.side then
             button:SetPoint("LEFT", nativeTabs, "RIGHT", (x - tabsRight) / scale, 0)
             x = x + width + gap
         else
@@ -479,6 +495,7 @@ function lib:RegisterTab(id, info)
         name = info.name,
         icon = info.icon or 134400, -- Interface\Icons\INV_Misc_QuestionMark
         iconTexCoords = info.iconTexCoords,
+        side = info.side,
         onCreate = info.onCreate,
         onShow = info.onShow,
         onHide = info.onHide,

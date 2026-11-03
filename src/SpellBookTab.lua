@@ -1010,6 +1010,7 @@ LibStub("LibSpellBookTabs-1.0"):RegisterTab(addonName, {
     name = "Macro Spellbook",
     icon = ICON_MACRO,
     iconTexCoords = ICON_MACRO_COORDS,
+    side = true,
     onCreate = buildPage,
     onShow = refresh,
 })
