@@ -36,8 +36,6 @@ smb.classConfigs.PALADIN = {
         } },
         { name = "Buffs & Defence", sequence = true, spells = {
             "Seal of *",
-            "Blessing of *",
-            "Greater Blessing of *",
             "Salvation",
             "Mass Salvation",
             "Righteous Fury",
@@ -45,6 +43,10 @@ smb.classConfigs.PALADIN = {
             "Divine Shield",
             "Voice of Truth",
             "Templar's Bulwark",
+        } },
+        { name = "Blessings", sequence = true, spells = {
+            "Blessing of *",
+            "Greater Blessing of *",
         } },
         { name = "Auras", noGlow = true, spells = {
             "Devotion Aura",
@@ -86,6 +88,7 @@ smb.classConfigs.PALADIN = {
 
     buffs = {
         "Blessing of *",
+        "Greater Blessing of *",
     },
 
     cursor = {},
