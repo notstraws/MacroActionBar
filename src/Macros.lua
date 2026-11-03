@@ -430,7 +430,7 @@ function smb.hasModifierOn(macro)
     return false
 end
 
--- The class config's forms' names, in config order: Druids' Caster, Cat and Bear.
+-- The class config's forms' names, in config order: Druids' Caster, Cat, Bear, Travel and Aquatic.
 function smb.formNames()
     local names = {}
     for i, form in ipairs(classConfig().forms) do names[i] = form.name end
@@ -804,10 +804,14 @@ local function castBody(macro)
     -- racials are cast and useItems slots used; the petAttack option then sends the pet at the current
     -- target before the cast; the stance option switches stance before the cast. With racials, items, a
     -- stance or /startattack first, #showtooltip names the spell so the button doesn't show the item or the
-    -- stance
+    -- stance. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
+    -- stealthed (or channelling) no clause matches, and a bare #showtooltip would show a question mark
     local spam = smb.isOptionOn(macro, "spam") and macro.spam or nil
     local stance = smb.isOptionOn(macro, "stance") and stanceLine(macro.stances) or ""
-    local namesSpell = stance ~= ""
+    -- the modifier spells' clauses go first, so a held key wins over the form spells, and those over the
+    -- macro's own
+    local mods = modifierClauses(macro) .. formClauses(macro)
+    local namesSpell = stance ~= "" or (spam ~= nil and mods == "")
     local before = {}
     for _, entry in ipairs(sideEntries(macro, "before", spam)) do
         before[#before + 1] = entry[2] .. "\n"
@@ -815,9 +819,6 @@ local function castBody(macro)
     end
     local header = "#showtooltip" .. (namesSpell and " " .. macro.name or "") .. "\n" .. table.concat(before)
         .. (smb.isOptionOn(macro, "petAttack") and "/petattack\n" or "") .. stance
-    -- the modifier spells' clauses go first, so a held key wins over the form spells, and those over the
-    -- macro's own
-    local mods = modifierClauses(macro) .. formClauses(macro)
     -- with a sequence, every step is cast like the macro's own spell
     local steps = sequenceSteps(macro)
     -- "/cast <conditional> name", or "/cast name" when there is no conditional; with a sequence,

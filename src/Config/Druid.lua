@@ -69,6 +69,7 @@ smb.classConfigs.DRUID = {
             "Innervate",
             "Teleport: Moonglade",
             "Track Humanoids",
+            "Shifting Power",
         } },
         { name = "Buffs & Defence", sequence = true, spells = {
             "Mark of the Wild",
@@ -131,6 +132,8 @@ smb.classConfigs.DRUID = {
         { name = "Caster", section = "Damage" },
         { name = "Cat", spells = { "Cat Form" } },
         { name = "Bear", spells = { "Dire Bear Form", "Bear Form" } },
+        { name = "Travel", spells = { "Travel Form" } },
+        { name = "Aquatic", spells = { "Aquatic Form" } },
     },
 
     extraSpells = {
@@ -139,6 +142,7 @@ smb.classConfigs.DRUID = {
         1066, -- Aquatic Form
         8946, -- Cure Poison
         18960, -- Teleport: Moonglade
+        1322605, -- Shifting Power
     },
 
     custom = {},
