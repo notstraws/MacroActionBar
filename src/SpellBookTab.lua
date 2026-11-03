@@ -15,6 +15,18 @@ local setMacro, refresh
 
 local MODIFIER_LABELS = {shift = "Shift", ctrl = "Ctrl", alt = "Alt"}
 
+-- A spam option's menu label and button subtext, by the kind of condition it adds (see spamCondition in
+-- Macros.lua).
+local SPAM_LABELS = {
+    nostealth = {"Stay In Stealth On Recast", "Stay stealthed"},
+    noform = {"Stay In Form On Recast", "Stay in form"},
+    nochanneling = {"Don't Recast While Channeling", "No recast"},
+}
+
+local function spamLabels(macro)
+    return SPAM_LABELS[macro.spam:match("^[^:]+")]
+end
+
 -- A section's name in the right-click submenus: "Cat Spells" for one named after a form (see smb.formNames),
 -- so it isn't mistaken for the form itself.
 local function sectionLabel(name)
@@ -72,9 +84,7 @@ local function showMacroMenu(button)
             -- a sequence can't downrank (see castBody in Macros.lua)
             addOption("Downrank In Raids", "raidRank1"):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
         end
-        if macro.spam then
-            addOption(macro.spam == "nostealth" and "Stay In Stealth On Recast" or "Don't Recast While Channeling", "spam")
-        end
+        if macro.spam then addOption(spamLabels(macro)[1], "spam") end
         if macro.stances then addOption("Switch To " .. macro.stances[1], "stance") end
         if macro.target then addOption("Cast On Focus", "focus") end
         if smb.offersPetAttack(macro) then addOption("Enable Pet Attack", "petAttack") end
@@ -497,7 +507,7 @@ function setMacro(button, macro, bars)
         button.subText:SetText("Raid R1")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "spam") then
-        button.subText:SetText(macro.spam == "nostealth" and "Stay stealthed" or "No recast")
+        button.subText:SetText(spamLabels(macro)[2])
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     else
         button.subText:SetText(smb.hasCastOptions(macro) and "Macro" or "Self")

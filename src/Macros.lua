@@ -23,7 +23,8 @@ end
 -- first), "cursor" (macro casts a ground-targeted spell where the cursor points), "focus" (the page
 -- also lists a copy of the macro that casts on the focus target), "pet" (a summon macro casts the
 -- pet's ability while that pet is out), "raidRank1" (the macro casts rank 1 in a raid group), "spam"
--- (the macro does nothing while its channelled spell is channelling, or its stealth spell is on), "stance" (the macro switches to a
+-- (the macro does nothing while its channelled spell is channelling, its stealth spell is on, or you are in
+-- its shapeshift form), "stance" (the macro switches to a
 -- stance the spell can be cast in first), "petAttack" (the macro also sends
 -- the pet to attack), "stopCast" (the macro stops the current cast first) or "startAttack" (the macro
 -- starts melee auto-attack after the cast). For petAttack, stopCast and startAttack, true or false overrides the
@@ -797,15 +798,15 @@ local function noteTick(macro, side, id, on)
 end
 
 local function castBody(macro)
-    -- the spam option adds [nochanneling:<spell>] (or [nostealth]) to every cast clause, so a press while
-    -- the spell is channelling (or stealth is on) can't restart (or cancel) it; the before-cast lines come
+    -- the spam option adds [nochanneling:<spell>] (or [nostealth], or [noform:n]) to every cast clause, so a
+    -- press while the spell is channelling (or stealth or the form is on) can't restart (or cancel) it; the before-cast lines come
     -- first, in the order the player ticked them (see sideEntries): the stopCast option stops the current
     -- cast (but, with spam on, not this spell's own channel), the startAttack option starts auto-attack,
     -- racials are cast and useItems slots used; the petAttack option then sends the pet at the current
     -- target before the cast; the stance option switches stance before the cast. With racials, items, a
     -- stance or /startattack first, #showtooltip names the spell so the button doesn't show the item or the
     -- stance. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
-    -- stealthed (or channelling) no clause matches, and a bare #showtooltip would show a question mark
+    -- stealthed (or channelling, or in the form) no clause matches, and a bare #showtooltip would show a question mark
     local spam = smb.isOptionOn(macro, "spam") and macro.spam or nil
     local stance = smb.isOptionOn(macro, "stance") and stanceLine(macro.stances) or ""
     -- the modifier spells' clauses go first, so a held key wins over the form spells, and those over the
@@ -888,11 +889,15 @@ end
 smb.macros = {}
 
 -- The condition a spell's spam option adds to its casts, or nil for spells without one. Stealth toggles
--- off when cast again, so a stealth spell casts only while not stealthed.
+-- off when cast again, so a stealth spell casts only while not stealthed. For a class with forms (Druids),
+-- a shapeshift spell on the stance bar casts only while not in that form, since casting it again shifts
+-- back out.
 local function spamCondition(name)
     local c = classConfig()
     if c.isStealthSpell(name) then return "nostealth" end
     if c.isChanneledSpell(name) then return "nochanneling:" .. name end
+    local slot = c.forms[1] and stanceSlot(name)
+    if slot then return "noform:" .. slot end
 end
 
 local function makeMacro(name, icon, unlearned, id)

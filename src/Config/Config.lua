@@ -64,7 +64,10 @@ local _, smb = ...
 --   spell is cast the way its own macro targets, like a modifier key's (see below), and a held modifier key
 --   wins over the form. A section named after a form only offers its spells in that form, so Cat offers no
 --   Bear spells, Bear no Cat spells, and Caster neither. The submenu lists the form's section first, or the
---   one named by section, e.g. { name = "Caster", section = "Damage" }. Only Druids use it.
+--   one named by section, e.g. { name = "Caster", section = "Damage" }. Only Druids use it. With forms set,
+--   every shapeshift spell on your stance bar (Moonkin Form too) also offers "Stay In Form On Recast"
+--   (right-click a macro): the cast gets a [noform:n] condition, so pressing it again while in that form
+--   does nothing instead of shifting you out, and you can spam the button.
 --
 -- Pet attack is not set here: Hunters and Warlocks get it automatically. Every mouseoverEnemy spell then
 --   offers "Enable Pet Attack" (right-click a macro): the macro starts with /petattack, sending your pet
