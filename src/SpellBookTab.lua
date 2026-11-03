@@ -187,7 +187,8 @@ local function showMacroMenu(button)
         end
         if noToggle then addOption(spamLabels(macro)[1], "spam") end
         -- one submenu per side of the cast: /cast !Auto Shot, /startattack, /stopattack, /petattack, /petfollow, the offGcd spells, the race's racials and the equipped
-        -- on-use items, each on either side, both or neither, and /stopcasting and /cancelaura Ice Block before only
+        -- on-use items, each on either side, both or neither, and /stopcasting, /cancelaura Ice Block, /cleartarget
+        -- [dead] and /targetenemy before only
         local function addSide(side)
             -- each line as {label, id, isOn, toggle}, the id naming it for smb.sidePosition
             local lines = {}
@@ -195,6 +196,10 @@ local function showMacroMenu(button)
                 lines[#lines + 1] = {label, key,
                     function() return smb.isLineOn(macro, key, side) end,
                     function() smb.toggleLine(macro, key, side) end}
+            end
+            if side == "before" and smb.offersRetarget(macro) then
+                addLine("clearDead", "Clear Dead Target")
+                addLine("targetEnemy", "Target Nearest Enemy")
             end
             if smb.offersAutoShot(macro) then addLine("autoShot", "Auto Shot") end
             if smb.offersStartAttack(macro) then

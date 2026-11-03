@@ -39,11 +39,12 @@ end
 -- overrides its default (autoShotDefault), nil follows it. "petFollowBefore" and "petFollowAfter" add /petfollow
 -- before (or after) the cast (see smb.offersPetFollow), and "stopAttackBefore" and "stopAttackAfter" /stopattack
 -- (offered with startAttack). "cancelIceBlockBefore" adds /cancelaura Ice Block before the cast (see
--- smb.offersCancelIceBlock). "useItems" and "useItemsAfter" hold a list of equipment
+-- smb.offersCancelIceBlock). "clearDeadBefore" adds /cleartarget [dead] and "targetEnemyBefore" /targetenemy
+-- [noharm][dead] before the cast (see smb.offersRetarget). "useItems" and "useItemsAfter" hold a list of equipment
 -- slots instead of a flag: the macro uses each slot's item, in that order, before (or after) the cast. "racials" and
 -- "racialsAfter" hold a set of racial and offGcd spell names: the macro casts each one before (or after) the cast. "order" and
 -- "orderAfter" hold the order the player ticked a side's lines in, as a list of ids ("stopCast", "startAttack",
--- "autoShot", "stopAttack", "petFollow", "petAttack", "cancelIceBlock", a racial's name or a slot number); it only orders the lines the settings above turn on (see sideEntries).
+-- "autoShot", "stopAttack", "petFollow", "petAttack", "cancelIceBlock", "clearDead", "targetEnemy", a racial's name or a slot number); it only orders the lines the settings above turn on (see sideEntries).
 -- "equipStopAttack" and "equipStopCast" are keyed by inventory slot rather than spell name: the equipment macro
 -- for that slot starts with /stopattack (or /stopcasting) before using the item. "modifiers" holds a table
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held,
@@ -371,6 +372,15 @@ function smb.offersCancelIceBlock(macro)
     return iceBlock ~= nil and not iceBlock.unlearned
 end
 
+-- An enemy spell's macro offers a "clearDead" line before the cast, /cleartarget [dead], dropping a dead
+-- target, and a "targetEnemy" line, /targetenemy [noharm][dead], targeting the nearest enemy when you have no
+-- live hostile target. Focus and enemy player copies cast on their own target, so they offer neither, nor do
+-- custom and equipment macros.
+function smb.offersRetarget(macro)
+    return macro.target == "harm" and not macro.custom and not macro.equipment and not macro.focus
+        and not macro.enemyPlayer
+end
+
 -- The lines with no default and no main side: a setting per side, each on or off by itself, and the
 -- function saying whether a macro offers the line. A line with no setting for a side is never on there.
 local SIDE_SETTINGS = {
@@ -378,11 +388,13 @@ local SIDE_SETTINGS = {
     petFollow = {before = "petFollowBefore", after = "petFollowAfter", offered = smb.offersPetFollow},
     stopAttack = {before = "stopAttackBefore", after = "stopAttackAfter", offered = smb.offersStartAttack},
     cancelIceBlock = {before = "cancelIceBlockBefore", offered = smb.offersCancelIceBlock},
+    clearDead = {before = "clearDeadBefore", offered = smb.offersRetarget},
+    targetEnemy = {before = "targetEnemyBefore", offered = smb.offersRetarget},
 }
 
--- Whether a macro has its "stopCast", "startAttack", "stopAttack", "autoShot", "petFollow", "petAttack" or
--- "cancelIceBlock" line on a side ("before" or "after") of the cast; all but stopCast and cancelIceBlock can be
--- on either, both or neither, those two only before. A copy has its own (see settingKey).
+-- Whether a macro has its "stopCast", "startAttack", "stopAttack", "autoShot", "petFollow", "petAttack",
+-- "cancelIceBlock", "clearDead" or "targetEnemy" line on a side ("before" or "after") of the cast; all but stopCast,
+-- cancelIceBlock, clearDead and targetEnemy can be on either, both or neither, those four only before. A copy has its own (see settingKey).
 function smb.isLineOn(macro, key, side)
     if SIDE_SETTINGS[key] then
         if not SIDE_SETTINGS[key].offered(macro) then return false end
@@ -989,8 +1001,8 @@ local function stancesOf(name, id)
     return stances
 end
 
--- A macro's "/stopcasting", "/startattack", "/stopattack", "/cast !Auto Shot", "/petfollow", "/petattack" or
--- "/cancelaura Ice Block" line on a side of the cast, with the
+-- A macro's "/stopcasting", "/startattack", "/stopattack", "/cast !Auto Shot", "/petfollow", "/petattack",
+-- "/cancelaura Ice Block", "/cleartarget [dead]" or "/targetenemy [noharm][dead]" line on a side of the cast, with the
 -- spam condition on /stopcasting, or nil when it is off on that side. The "!" keeps a press while Auto Shot
 -- is already repeating from toggling it off, so the macro can be spammed.
 local function placedLine(macro, key, side, spam)
@@ -1001,6 +1013,8 @@ local function placedLine(macro, key, side, spam)
     if key == "petFollow" then return "/petfollow" end
     if key == "petAttack" then return "/petattack" end
     if key == "cancelIceBlock" then return "/cancelaura Ice Block" end
+    if key == "clearDead" then return "/cleartarget [dead]" end
+    if key == "targetEnemy" then return "/targetenemy [noharm][dead]" end
     return "/stopcasting" .. (spam and " [" .. spam .. "]" or "")
 end
 
@@ -1008,11 +1022,12 @@ end
 local ORDER_SETTING = {before = "order", after = "orderAfter"}
 
 -- The lines a macro has on a side of the cast, as {id, text}, in the order the player ticked them. Lines
--- the order list doesn't name (on by a default, or ticked before it existed) come first: stopCast and
--- cancelIceBlock, then the rest in menu order (autoShot, startAttack, stopAttack, petAttack, petFollow), racials, then slots.
+-- the order list doesn't name (on by a default, or ticked before it existed) come first: clearDead and
+-- targetEnemy, then stopCast and cancelIceBlock, then the rest in menu order (autoShot, startAttack, stopAttack,
+-- petAttack, petFollow), racials, then slots.
 local function sideEntries(macro, side, spam)
     local entries = {}
-    for _, key in ipairs({"stopCast", "cancelIceBlock", "autoShot", "startAttack", "stopAttack", "petAttack", "petFollow"}) do
+    for _, key in ipairs({"clearDead", "targetEnemy", "stopCast", "cancelIceBlock", "autoShot", "startAttack", "stopAttack", "petAttack", "petFollow"}) do
         local line = placedLine(macro, key, side, spam)
         if line then entries[#entries + 1] = {key, line} end
     end
@@ -1034,8 +1049,8 @@ local function sideEntries(macro, side, spam)
 end
 
 -- A line's place among a macro's lines on a side of the cast, or nil when it is off there. id is "stopCast",
--- "startAttack", "stopAttack", "autoShot", "petFollow", "petAttack", "cancelIceBlock", a racial's name or a slot
--- number.
+-- "startAttack", "stopAttack", "autoShot", "petFollow", "petAttack", "cancelIceBlock", "clearDead", "targetEnemy", a
+-- racial's name or a slot number.
 function smb.sidePosition(macro, id, side)
     for i, entry in ipairs(sideEntries(macro, side)) do
         if entry[1] == id then return i end
@@ -1074,9 +1089,9 @@ local function castBody(macro)
     local before = {}
     for _, entry in ipairs(sideEntries(macro, "before", spam)) do
         before[#before + 1] = entry[2] .. "\n"
-        -- /stopcasting, /stopattack, /petattack and /cancelaura don't change the button's icon
+        -- /stopcasting, /stopattack, /petattack, /cancelaura, /cleartarget and /targetenemy don't change the button's icon
         if entry[1] ~= "stopCast" and entry[1] ~= "stopAttack" and entry[1] ~= "petAttack"
-            and entry[1] ~= "cancelIceBlock" then
+            and entry[1] ~= "cancelIceBlock" and entry[1] ~= "clearDead" and entry[1] ~= "targetEnemy" then
             namesSpell = true
         end
     end
@@ -1840,7 +1855,8 @@ function smb.toggleOption(macro, key)
     rewrite(macro)
 end
 
--- Flips a macro's "stopCast", "startAttack", "stopAttack", "autoShot", "petFollow", "petAttack" or "cancelIceBlock" line on one side ("before" or "after") of the cast,
+-- Flips a macro's "stopCast", "startAttack", "stopAttack", "autoShot", "petFollow", "petAttack", "cancelIceBlock",
+-- "clearDead" or "targetEnemy" line on one side ("before" or "after") of the cast,
 -- moving it to the end of that side's order when it turns on, then rewrites the macro like smb.toggleOption.
 function smb.toggleLine(macro, key, side)
     local placement = PLACEMENT[key]
@@ -1948,7 +1964,7 @@ local SPELL_SETTINGS = {
     "mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam",
     "petAttack", "stopCast", "startAttack", "startAttackBefore", "petAttackAfter", "autoShotBefore",
     "autoShotAfter", "petFollowBefore", "petFollowAfter",
-    "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
+    "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "clearDeadBefore", "targetEnemyBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
     "sequence", "followUp",
 }
 local EQUIPMENT_SETTINGS = {"equipStopAttack", "equipStopCast"}
