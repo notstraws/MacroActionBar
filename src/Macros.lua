@@ -40,7 +40,8 @@ end
 -- before (or after) the cast (see smb.offersPetFollow), and "stopAttackBefore" and "stopAttackAfter" /stopattack
 -- (offered with startAttack). "cancelIceBlockBefore" adds /cancelaura Ice Block before the cast (see
 -- smb.offersCancelIceBlock). "clearDeadBefore" adds /cleartarget [dead] and "targetEnemyBefore" /targetenemy
--- [noharm][dead] before the cast (see smb.offersRetarget). "useItems" and "useItemsAfter" hold a list of equipment
+-- [noharm][dead] before the cast (see smb.offersRetarget); true or false overrides their defaults (clearDeadDefault,
+-- targetEnemyDefault), nil follows them. "useItems" and "useItemsAfter" hold a list of equipment
 -- slots instead of a flag: the macro uses each slot's item, in that order, before (or after) the cast. "racials" and
 -- "racialsAfter" hold a set of racial and offGcd spell names: the macro casts each one before (or after) the cast. "order" and
 -- "orderAfter" hold the order the player ticked a side's lines in, as a list of ids ("stopCast", "startAttack",
@@ -123,18 +124,41 @@ function smb.setAutoShotsByDefault(on)
     MacroSpellbookDB.autoShotDefault = on or nil
 end
 
+-- Whether "clearDeadBefore" is on for every enemy spell macro that has no setting of its own.
+function smb.clearsDeadByDefault()
+    return MacroSpellbookDB ~= nil and MacroSpellbookDB.clearDeadDefault == true
+end
+
+function smb.setClearsDeadByDefault(on)
+    MacroSpellbookDB = MacroSpellbookDB or {}
+    MacroSpellbookDB.clearDeadDefault = on or nil
+end
+
+-- Whether "targetEnemyBefore" is on for every enemy spell macro that has no setting of its own.
+function smb.targetsEnemyByDefault()
+    return MacroSpellbookDB ~= nil and MacroSpellbookDB.targetEnemyDefault == true
+end
+
+function smb.setTargetsEnemyByDefault(on)
+    MacroSpellbookDB = MacroSpellbookDB or {}
+    MacroSpellbookDB.targetEnemyDefault = on or nil
+end
+
 -- The settings with a default; each spell macro stores one only where it differs from the default.
 local DEFAULTED = { petAttack = true, stopCast = true, startAttack = true }
 
 -- The equipment macros' settings, keyed by the macro's slot (see settings).
 local EQUIPMENT_OPTIONS = { equipStopAttack = true, equipStopCast = true }
 
--- The default of a setting that has one ("petAttack", "stopCast", "startAttack" or "autoShotAfter"), or nil.
+-- The default of a setting that has one ("petAttack", "stopCast", "startAttack", "autoShotAfter",
+-- "clearDeadBefore" or "targetEnemyBefore"), or nil.
 local function optionDefault(key)
     if key == "petAttack" then return smb.petAttacksByDefault() end
     if key == "stopCast" then return smb.stopsCastingByDefault() end
     if key == "startAttack" then return smb.startsAttackByDefault() end
     if key == "autoShotAfter" then return smb.autoShotsByDefault() end
+    if key == "clearDeadBefore" then return smb.clearsDeadByDefault() end
+    if key == "targetEnemyBefore" then return smb.targetsEnemyByDefault() end
 end
 
 local function toggleSetting(key, name)

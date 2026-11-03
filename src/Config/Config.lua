@@ -119,7 +119,9 @@ local _, smb = ...
 --   for /cancelaura Ice Block, so the spell isn't blocked while Ice Block is on. Every mouseoverEnemy spell
 --   (damaging spells) also offers, in the Before Casting menu only, "Clear Dead Target" for /cleartarget [dead],
 --   dropping a dead target, and "Target Nearest Enemy" for /targetenemy [noharm][dead], targeting the nearest
---   enemy when you have no live hostile target. Its focus and enemy player macros offer neither.
+--   enemy when you have no live hostile target. Its focus and enemy player macros offer neither. The settings
+--   dropdown's Global Macro Settings turn either line on for every such spell at once; ticking it in a macro's
+--   menu overrides that for the macro.
 --
 --   Both menus also list your equipped items with a "Use:" effect, e.g. engineering gloves and trinkets.
 --   Tick several to stack them: the macro uses each one, in the order you ticked them, on that side of the
