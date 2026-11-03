@@ -885,11 +885,16 @@ local function buildPage(page)
             smb.setCountSpellsOnBars(not smb.countsSpellsOnBars())
             layout(page)
         end)
-        if smb.classOffersPetAttack() or smb.classOffersStopCast() or smb.classOffersStartAttack()
-            or smb.classOffersAutoShot() then
-            rootDescription:CreateDivider()
-            rootDescription:CreateTitle("Global Macro Settings")
-        end
+        rootDescription:CreateDivider()
+        rootDescription:CreateTitle("Global Macro Settings")
+        rootDescription:CreateCheckbox("Clear dead target before spell cast", smb.clearsDeadByDefault, function()
+            smb.setClearsDeadByDefault(not smb.clearsDeadByDefault())
+            refresh(page) -- rewrites the macros that follow the default
+        end)
+        rootDescription:CreateCheckbox("Target nearest enemy before spell cast", smb.targetsEnemyByDefault, function()
+            smb.setTargetsEnemyByDefault(not smb.targetsEnemyByDefault())
+            refresh(page) -- rewrites the macros that follow the default
+        end)
         if smb.classOffersPetAttack() then
             rootDescription:CreateCheckbox("Enable Pet attacks before spell cast", smb.petAttacksByDefault, function()
                 smb.setPetAttacksByDefault(not smb.petAttacksByDefault())
