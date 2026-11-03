@@ -110,6 +110,11 @@ smb.classConfigs.DRUID = {
         "Thorns",
     },
 
+    buffs = {
+        "Mark of the Wild",
+        "Thorns",
+    },
+
     cursor = {
         "Hurricane",
     },

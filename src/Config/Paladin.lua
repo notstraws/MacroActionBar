@@ -84,6 +84,10 @@ smb.classConfigs.PALADIN = {
         "Mass Salvation",
     },
 
+    buffs = {
+        "Blessing of *",
+    },
+
     cursor = {},
 
     cooldowns = {

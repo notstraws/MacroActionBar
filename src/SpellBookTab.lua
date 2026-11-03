@@ -50,7 +50,8 @@ local function menuOrder(sections, first)
     return ordered
 end
 
--- Every spell macro has a menu; custom macros don't. A focus copy's menu only removes it.
+-- Every spell macro has a menu; custom macros don't. A focus copy's menu only removes it; a nearest copy's
+-- also offers its own sequence.
 local function showMacroMenu(button)
     local macro = button.macro
     if not smb.hasOptions(macro) then return end
@@ -67,8 +68,59 @@ local function showMacroMenu(button)
                     refresh(button:GetParent())
                 end)
         end
+        -- the Sequence submenu: the spells cast after the macro's own, ticked in order: the ones
+        -- smb.canSequence allows, under their section's title
+        local function addSequenceMenu()
+            if not smb.offersSequence(macro) then return end
+            local function changed()
+                refresh(button:GetParent()) -- rewrites the macro, its focus copy and its subtext
+            end
+            local picked = smb.sequenceSpells(macro)
+            local submenu = rootDescription:CreateButton("Sequence: "
+                .. (#picked > 0 and (#picked + 1) .. " spells" or "None"))
+            submenu:CreateTitle("Cast In Sequence (resets after 2 sec)")
+            submenu:CreateButton("Clear", function()
+                smb.clearSequence(macro)
+                changed()
+            end)
+            local function addPick(name, suffix)
+                local pos = smb.sequencePosition(macro, name)
+                submenu:CreateCheckbox(name .. (pos and " (" .. pos .. ")" or "") .. (suffix or ""),
+                    function() return smb.sequencePosition(macro, name) ~= nil end,
+                    function()
+                        smb.toggleSequenceSpell(macro, name)
+                        changed()
+                    end)
+            end
+            -- the menuLast sections (see smb.menuLast) go after the rest
+            local listed, section = {}, nil
+            for _, lastPass in ipairs({false, true}) do
+                for _, other in ipairs(smb.macros) do
+                    if smb.macroByName[other.name] == other and smb.canSequence(macro, other)
+                        and smb.menuLast(other.category) == lastPass then
+                        if other.category ~= section then
+                            section = other.category
+                            submenu:CreateTitle(sectionLabel(section))
+                        end
+                        listed[other.name] = true
+                        addPick(other.name)
+                    end
+                end
+            end
+            -- a pick no longer learned (e.g. after a respec) or moved out of a sequence section stays listed,
+            -- so it can be unticked
+            for _, name in ipairs(picked) do
+                if not listed[name] then addPick(name, " (unavailable)") end
+            end
+        end
         if macro.focus then
             addOption("Cast On Focus", "focus")
+            return
+        end
+        -- a nearest copy has its own sequence (see sequenceKey in Macros.lua)
+        if macro.nearest then
+            addOption("Cast On Nearest Player", "nearest")
+            addSequenceMenu()
             return
         end
         if macro.equipment then
@@ -87,6 +139,7 @@ local function showMacroMenu(button)
         if macro.spam then addOption(spamLabels(macro)[1], "spam") end
         if macro.stances then addOption("Switch To " .. macro.stances[1], "stance") end
         if macro.target then addOption("Cast On Focus", "focus") end
+        if macro.buff then addOption("Cast On Nearest Player", "nearest") end
         if smb.offersPetAttack(macro) then addOption("Enable Pet Attack", "petAttack") end
         -- one submenu per side of the cast: /startattack, the race's racials and the equipped on-use items,
         -- each on either side, both or neither, and /stopcasting before only
@@ -154,50 +207,7 @@ local function showMacroMenu(button)
         end
         addSide("before")
         addSide("after")
-        if smb.offersSequence(macro) then
-            -- the spells cast after the macro's own, ticked in order: the ones smb.canSequence allows, under
-            -- their section's title
-            local function changed()
-                refresh(button:GetParent()) -- rewrites the macro, its focus copy and its subtext
-            end
-            local picked = smb.sequenceSpells(macro)
-            local submenu = rootDescription:CreateButton("Sequence: "
-                .. (#picked > 0 and (#picked + 1) .. " spells" or "None"))
-            submenu:CreateTitle("Cast In Sequence (resets after 2 sec)")
-            submenu:CreateButton("Clear", function()
-                smb.clearSequence(macro)
-                changed()
-            end)
-            local function addPick(name, suffix)
-                local pos = smb.sequencePosition(macro, name)
-                submenu:CreateCheckbox(name .. (pos and " (" .. pos .. ")" or "") .. (suffix or ""),
-                    function() return smb.sequencePosition(macro, name) ~= nil end,
-                    function()
-                        smb.toggleSequenceSpell(macro, name)
-                        changed()
-                    end)
-            end
-            -- the menuLast sections (see smb.menuLast) go after the rest
-            local listed, section = {}, nil
-            for _, lastPass in ipairs({false, true}) do
-                for _, other in ipairs(smb.macros) do
-                    if smb.macroByName[other.name] == other and smb.canSequence(macro, other)
-                        and smb.menuLast(other.category) == lastPass then
-                        if other.category ~= section then
-                            section = other.category
-                            submenu:CreateTitle(sectionLabel(section))
-                        end
-                        listed[other.name] = true
-                        addPick(other.name)
-                    end
-                end
-            end
-            -- a pick no longer learned (e.g. after a respec) or moved out of a sequence section stays listed,
-            -- so it can be unticked
-            for _, name in ipairs(picked) do
-                if not listed[name] then addPick(name, " (unavailable)") end
-            end
-        end
+        addSequenceMenu()
         if not smb.offersModifiers(macro) then return end
         -- one submenu per modifier key, picking the spell cast while it is held from the page's learned
         -- spells, grouped by section, as {name, onFocus}. A spell with a focus copy also offers casting it on
@@ -472,6 +482,9 @@ function setMacro(button, macro, bars)
         button.subText:SetTextColor(unpack(INK_COLOR))
     elseif macro.focus then
         button.subText:SetText("Focus")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif macro.nearest then
+        button.subText:SetText("Nearest")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "pet") then
         button.subText:SetText("Pet")

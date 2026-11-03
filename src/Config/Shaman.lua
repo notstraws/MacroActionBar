@@ -100,6 +100,11 @@ smb.classConfigs.SHAMAN = {
         "Water Walking",
     },
 
+    buffs = {
+        "Water Breathing",
+        "Water Walking",
+    },
+
     cursor = {
         "Totemic Projection",
     },

@@ -77,6 +77,8 @@ smb.classConfigs.HUNTER = {
 
     mouseoverFriend = {},
 
+    buffs = {},
+
     cursor = {
         "Volley",
         "Flare",

@@ -114,6 +114,14 @@ smb.classConfigs.PRIEST = {
         "Power Infusion",
     },
 
+    buffs = {
+        "Power Word: Fortitude",
+        "Divine Spirit",
+        "Shadow Protection",
+        "Fear Ward",
+        "Power Infusion",
+    },
+
     cursor = {},
 
     cooldowns = {
