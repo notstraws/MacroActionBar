@@ -130,7 +130,9 @@ local _, smb = ...
 --   after its spells; any other category gets its own section after them.
 --   name: up to 16 characters (WoW's macro name limit). body: the macro text, up to 255 characters; use \n
 --   between lines. icon (optional): an icon file ID or texture path; without one, a body that starts with
---   "#showtooltip <spell>" shows that spell's icon.
+--   "#showtooltip <spell>" shows that spell's icon. description (optional): text the page's tooltip shows
+--   instead of the body while Alt is held. first (optional): true lists the macro before its
+--   section's spells instead of after them.
 --   Editing a body updates the WoW macro the next time the page opens. Removing an entry does not delete
 --   the WoW macro: delete it in /macro.
 

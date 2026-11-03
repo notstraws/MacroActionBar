@@ -1065,6 +1065,8 @@ local function makeCustomMacro(entry, index, categoryRank)
         priority = index,
         category = entry.category or "Custom",
         custom = true,
+        first = entry.first and true or nil,
+        description = type(entry.description) == "string" and entry.description or nil,
         cursor = false,
         macroName = entry.name:sub(1, MAX_MACRO_NAME),
         macroIcon = entry.icon or ICON_QUESTION_MARK,
@@ -1286,10 +1288,11 @@ function smb.collectMacros()
     if smb.showsUnlearned() then
         forEachUnlearnedSpell(function(name, icon, id) add(name, icon, true, id) end, seen)
     end
-    -- by section; within one, spells before custom macros, then config order, then by name, each focus
-    -- copy right after its spell and each nearest copy after that
+    -- by section; within one, first = true custom macros, then spells, then other custom macros, then config
+    -- order, then by name, each focus copy right after its spell and each nearest copy after that
     table.sort(smb.macros, function(a, b)
         if a.categoryRank ~= b.categoryRank then return a.categoryRank < b.categoryRank end
+        if (not a.first) ~= (not b.first) then return a.first == true end
         if (not a.custom) ~= (not b.custom) then return not a.custom end
         if a.priority ~= b.priority then return a.priority < b.priority end
         if a.name ~= b.name then return a.name < b.name end
@@ -1557,6 +1560,19 @@ local function rewrite(macro)
     syncMacro(macro, GetMacroIndexByName(macro.macroName))
 end
 
+-- Clears the modifier picks that cast a spell on the focus target, once its focus copy is gone.
+local function clearFocusPicks(spell)
+    local set = settings("modifiers")
+    for name, spells in pairs(set) do
+        for _, mod in ipairs(smb.MODIFIERS) do
+            if spells[mod] == spell and spells[mod .. "Focus"] then
+                spells[mod], spells[mod .. "Focus"] = nil, nil
+            end
+        end
+        if not next(spells) then set[name] = nil end
+    end
+end
+
 -- smb.toggleOption without the rewrite.
 local function flipOption(macro, key)
     if EQUIPMENT_OPTIONS[key] then
@@ -1567,17 +1583,7 @@ local function flipOption(macro, key)
         toggleSetting(key, macro.name)
     end
     -- turning focus off removes the focus copy, so the modifier picks casting it go too
-    if key == "focus" and not smb.isOptionOn(macro, "focus") then
-        local set = settings("modifiers")
-        for name, spells in pairs(set) do
-            for _, mod in ipairs(smb.MODIFIERS) do
-                if spells[mod] == macro.name and spells[mod .. "Focus"] then
-                    spells[mod], spells[mod .. "Focus"] = nil, nil
-                end
-            end
-            if not next(spells) then set[name] = nil end
-        end
-    end
+    if key == "focus" and not smb.isOptionOn(macro, "focus") then clearFocusPicks(macro.name) end
 end
 
 function smb.toggleOption(macro, key)
@@ -1670,5 +1676,51 @@ end
 -- Removes every spell from a macro's sequence, then rewrites the macro like smb.toggleOption.
 function smb.clearSequence(macro)
     settings("sequence")[sequenceKey(macro)] = nil
+    rewrite(macro)
+end
+
+-- The settings a spell macro stores under its spell's name, and an equipment macro under its slot. The
+-- sequence setting is cleared separately, since a nearest copy's sits under its own key (see sequenceKey).
+local SPELL_SETTINGS = {
+    "mouseover", "cursor", "focus", "nearest", "pet", "raidRank1", "spam", "stance",
+    "petAttack", "stopCast", "startAttack", "startAttackBefore", "autoShotBefore", "autoShotAfter",
+    "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
+}
+local EQUIPMENT_SETTINGS = {"equipStopAttack", "equipStopCast"}
+
+-- Every spell macro but a focus or nearest copy, and every equipment macro, can be reset to its defaults. A
+-- copy's settings are its spell's, so it is reset from the spell's macro.
+function smb.offersReset(macro)
+    return macro.equipment == true or (smb.offersUseItems(macro) and not isCopy(macro))
+end
+
+-- The keys a macro's settings are stored under, as {setting, key} pairs.
+local function storedSettings(macro)
+    local stored = {}
+    if macro.equipment then
+        for _, setting in ipairs(EQUIPMENT_SETTINGS) do stored[#stored + 1] = {setting, macro.slot} end
+        return stored
+    end
+    for _, setting in ipairs(SPELL_SETTINGS) do stored[#stored + 1] = {setting, macro.name} end
+    stored[#stored + 1] = {"sequence", macro.name}
+    stored[#stored + 1] = {"sequence", macro.name .. NEAREST_SUFFIX}
+    return stored
+end
+
+-- Whether a macro has any setting that differs from its defaults.
+function smb.hasCustomSettings(macro)
+    for _, pair in ipairs(storedSettings(macro)) do
+        if settings(pair[1])[pair[2]] ~= nil then return true end
+    end
+    return false
+end
+
+-- Clears every setting of a macro, so it follows the defaults again, then rewrites it like smb.toggleOption.
+-- Turning focus and nearest off removes the copies, so the page must be rebuilt after.
+function smb.resetMacro(macro)
+    if not smb.offersReset(macro) then return end
+    local hadFocus = not macro.equipment and smb.isOptionOn(macro, "focus")
+    for _, pair in ipairs(storedSettings(macro)) do settings(pair[1])[pair[2]] = nil end
+    if hadFocus then clearFocusPicks(macro.name) end
     rewrite(macro)
 end
