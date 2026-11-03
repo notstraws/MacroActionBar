@@ -14,7 +14,8 @@ local _, smb = ...
 --   in alphabetical order. Add noGlow = true to a section, e.g. { name = "Auras", noGlow = true, spells =
 --   { ... } }, to stop its spells glowing when they aren't on your action bars. Add sequence = true to a
 --   section to let its spells cast in sequence (see Cast sequences below). Add cooldownSteps = true to a
---   section, e.g. Damage or Healing, to offer its spells only in cooldown spells' sequences.
+--   section, e.g. Damage or Healing, to offer its spells only in cooldown spells' sequences. Add
+--   menuLast = true to a section to list it last in the right-click submenus, e.g. Druids' Forms.
 --
 -- mouseoverEnemy / mouseoverFriend: spells that offer "Cast On Mouseover" (right-click a macro), cast on a
 --   hostile / friendly mouseover target. A spell in both lists casts on either. Every harmful spell with a
@@ -54,6 +55,16 @@ local _, smb = ...
 --   { ["Summon Imp"] = "Fire Shield", ... }. With it on, the macro casts the ability while that pet is out
 --   and summons the pet otherwise. The pet is matched by its creature family: the name after "Summon ".
 --   Only Hunters and Warlocks use it.
+--
+-- forms: the forms a spell macro can cast another spell in, as { { name = "Cat", spells = { "Cat Form" } },
+--   ... }. Each one offers a "<name>" submenu (right-click a macro) where you pick another learned spell, by
+--   section, that the macro casts while you are in that form, e.g. Shred in Cat and Maul in Bear on the
+--   Wrath macro. spells are the shapeshift spells that count as the form; the first one learned is used, so
+--   list Dire Bear Form before Bear Form. A form with no spells is caster form (no shapeshift). The picked
+--   spell is cast the way its own macro targets, like a modifier key's (see below), and a held modifier key
+--   wins over the form. A section named after a form only offers its spells in that form, so Cat offers no
+--   Bear spells, Bear no Cat spells, and Caster neither. The submenu lists the form's section first, or the
+--   one named by section, e.g. { name = "Caster", section = "Damage" }. Only Druids use it.
 --
 -- Pet attack is not set here: Hunters and Warlocks get it automatically. Every mouseoverEnemy spell then
 --   offers "Enable Pet Attack" (right-click a macro): the macro starts with /petattack, sending your pet

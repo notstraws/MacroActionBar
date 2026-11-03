@@ -37,7 +37,9 @@ end
 -- for that slot starts with /stopattack (or /stopcasting) before using the item. "modifiers" holds a table
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held,
 -- on the focus target when shiftFocus (ctrlFocus, altFocus) is true (see smb.modifierSpell). "sequence" holds a
--- list of spell names per spell: the macro /castsequences its own spell, then those, in that order.
+-- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "forms"
+-- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
+-- the class config's forms (see smb.formSpell).
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
 local function settings(key)
     MacroSpellbookDB = MacroSpellbookDB or {}
@@ -156,6 +158,7 @@ local function classConfig()
         extraSpells = source.extraSpells or {},
         petAbilities = hasPet and source.petAbilities or {},
         stances = source.stances or {},
+        forms = source.forms or {},
         hasStances = source.stances ~= nil,
         petAttack = hasPet,
         stopCast = MELEE_CLASSES[class] ~= true,
@@ -427,6 +430,54 @@ function smb.hasModifierOn(macro)
     return false
 end
 
+-- The class config's forms' names, in config order: Druids' Caster, Cat and Bear.
+function smb.formNames()
+    local names = {}
+    for i, form in ipairs(classConfig().forms) do names[i] = form.name end
+    return names
+end
+
+-- The section a form's submenu lists first: the form config's section, else the one named after the form.
+function smb.formSection(form)
+    for _, entry in ipairs(classConfig().forms) do
+        if entry.name == form then return entry.section or form end
+    end
+end
+
+-- Whether a section (a category's name) is listed last in the right-click submenus: menuLast = true.
+function smb.menuLast(category)
+    for _, section in ipairs(classConfig().categories) do
+        if section.name == category then return section.menuLast == true end
+    end
+    return false
+end
+
+-- Every spell macro but a focus copy offers a spell for each of the class config's forms.
+function smb.offersForms(macro)
+    return smb.offersModifiers(macro) and classConfig().forms[1] ~= nil
+end
+
+-- The spell a macro casts while in a form (a form's name from the class config), or nil.
+function smb.formSpell(macro, form)
+    if not smb.offersForms(macro) then return nil end
+    local spells = settings("forms")[macro.name]
+    return spells and spells[form]
+end
+
+-- Whether a page macro's spell can be cast in a form (a form's name from the class config): not when it sits
+-- in a section named after another form, so Cat offers no Bear spells, Bear no Cat spells, and Caster neither.
+function smb.formAllows(form, other)
+    return other.category == form or not tContains(smb.formNames(), other.category)
+end
+
+-- Whether a macro has a spell set for any form.
+function smb.hasFormOn(macro)
+    for _, form in ipairs(smb.formNames()) do
+        if smb.formSpell(macro, form) then return true end
+    end
+    return false
+end
+
 -- Every sequence starts over after 2 seconds without a press.
 local SEQUENCE_RESET = "reset=2 "
 
@@ -510,6 +561,18 @@ end
 -- clauses. Rebuilt with smb.macros.
 smb.macroByName = {}
 
+-- A clause casting another page macro's spell under a condition (e.g. "mod:shift"), followed by "; ", the
+-- way that spell's own page macro targets: at the mouseover or the cursor when that option is on there.
+local function targetedClause(condition, other)
+    local conditional = "[" .. condition .. "]"
+    if smb.isOptionOn(other, "cursor") then
+        conditional = "[" .. condition .. ",@cursor]"
+    elseif smb.isOptionOn(other, "mouseover") then
+        conditional = "[" .. condition .. ",@mouseover," .. other.target .. ",nodead]" .. conditional
+    end
+    return conditional .. " " .. other.name .. "; "
+end
+
 -- The clauses that cast a macro's modifier spells, each followed by "; ", ready to go before its own, e.g.
 -- "[mod:shift] Fear; [mod:alt,@mouseover,help,nodead][mod:alt] Flash Heal; ", or "". Each spell is cast the
 -- way its own page macro targets: at the mouseover or the cursor when that option is on there. A focus
@@ -522,16 +585,13 @@ local function modifierClauses(macro)
         local name, onFocus = smb.modifierSpell(macro, mod)
         local other = smb.macroByName[name or ""]
         if other and not other.unlearned and (not onFocus or smb.isOptionOn(other, "focus")) then
-            local held = "[mod:" .. mod
-            local conditional = held .. "]"
             if onFocus then
-                conditional = held .. ",@focus," .. other.target .. ",nodead]" .. conditional
-            elseif smb.isOptionOn(other, "cursor") then
-                conditional = held .. ",@cursor]"
-            elseif smb.isOptionOn(other, "mouseover") then
-                conditional = held .. ",@mouseover," .. other.target .. ",nodead]" .. conditional
+                local held = "[mod:" .. mod
+                clauses[#clauses + 1] = held .. ",@focus," .. other.target .. ",nodead]" .. held .. "] "
+                    .. other.name .. "; "
+            else
+                clauses[#clauses + 1] = targetedClause("mod:" .. mod, other)
             end
-            clauses[#clauses + 1] = conditional .. " " .. other.name .. "; "
         end
     end
     return table.concat(clauses)
@@ -567,6 +627,33 @@ local function stanceLine(stances)
         slots[#slots + 1] = stanceSlot(stance)
     end
     return "/cast [nostance:" .. table.concat(slots, "/") .. "] " .. stances[1] .. "\n"
+end
+
+-- A form's macro condition: "noform" for one with no spells (caster form), else "form:n" for the slot of its
+-- first learned spell, or nil when none is learned.
+local function formCondition(form)
+    if not form.spells then return "noform" end
+    for _, spell in ipairs(form.spells) do
+        for i = 1, GetNumShapeshiftForms() do
+            local spellID = select(4, GetShapeshiftFormInfo(i))
+            if spellID and C_Spell.GetSpellName(spellID) == spell then return "form:" .. i end
+        end
+    end
+end
+
+-- The clauses that cast a macro's form spells, each followed by "; ", ready to go after its modifier
+-- clauses, e.g. "[form:3] Shred; [form:1,@mouseover,harm,nodead][form:1] Faerie Fire (Feral); ", or "". Each
+-- spell is cast the way its own page macro targets, like a modifier spell. A pick that isn't learned, whose
+-- form isn't, or that the form doesn't allow (see smb.formAllows), is left out, keeping its setting.
+local function formClauses(macro)
+    if not smb.offersForms(macro) then return "" end
+    local clauses = {}
+    for _, form in ipairs(classConfig().forms) do
+        local other = smb.macroByName[smb.formSpell(macro, form.name) or ""]
+        local condition = other and not other.unlearned and smb.formAllows(form.name, other) and formCondition(form)
+        if condition then clauses[#clauses + 1] = targetedClause(condition, other) end
+    end
+    return table.concat(clauses)
 end
 
 -- The stances a stance-using class can be in: the Warrior stances and whatever is on the stance bar.
@@ -728,8 +815,9 @@ local function castBody(macro)
     end
     local header = "#showtooltip" .. (namesSpell and " " .. macro.name or "") .. "\n" .. table.concat(before)
         .. (smb.isOptionOn(macro, "petAttack") and "/petattack\n" or "") .. stance
-    -- the modifier spells' clauses go first, so a held key wins over the macro's own
-    local mods = modifierClauses(macro)
+    -- the modifier spells' clauses go first, so a held key wins over the form spells, and those over the
+    -- macro's own
+    local mods = modifierClauses(macro) .. formClauses(macro)
     -- with a sequence, every step is cast like the macro's own spell
     local steps = sequenceSteps(macro)
     -- "/cast <conditional> name", or "/cast name" when there is no conditional; with a sequence,
@@ -1383,6 +1471,16 @@ function smb.setModifierSpell(macro, mod, name, onFocus)
     local spells = set[macro.name] or {}
     spells[mod] = name
     spells[mod .. "Focus"] = name and onFocus or nil
+    set[macro.name] = next(spells) and spells or nil
+    rewrite(macro)
+end
+
+-- Sets the spell a macro casts while in a form (a form's name from the class config), or clears it with nil,
+-- then rewrites the macro like smb.toggleOption.
+function smb.setFormSpell(macro, form, name)
+    local set = settings("forms")
+    local spells = set[macro.name] or {}
+    spells[form] = name
     set[macro.name] = next(spells) and spells or nil
     rewrite(macro)
 end

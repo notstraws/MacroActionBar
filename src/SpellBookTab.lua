@@ -15,6 +15,29 @@ local setMacro, refresh
 
 local MODIFIER_LABELS = {shift = "Shift", ctrl = "Ctrl", alt = "Alt"}
 
+-- A section's name in the right-click submenus: "Cat Spells" for one named after a form (see smb.formNames),
+-- so it isn't mistaken for the form itself.
+local function sectionLabel(name)
+    return tContains(smb.formNames(), name) and name .. " Spells" or name
+end
+
+-- A submenu's sections ({name = ...} tables, in page order) in the order it lists them: the one named first
+-- (optional) at the top, then the rest in page order, then the menuLast ones (see smb.menuLast).
+local function menuOrder(sections, first)
+    local ordered, last = {}, {}
+    for _, section in ipairs(sections) do
+        if section.name == first then
+            table.insert(ordered, 1, section)
+        elseif smb.menuLast(section.name) then
+            last[#last + 1] = section
+        else
+            ordered[#ordered + 1] = section
+        end
+    end
+    for _, section in ipairs(last) do ordered[#ordered + 1] = section end
+    return ordered
+end
+
 -- Every spell macro has a menu; custom macros don't. A focus copy's menu only removes it.
 local function showMacroMenu(button)
     local macro = button.macro
@@ -142,15 +165,19 @@ local function showMacroMenu(button)
                         changed()
                     end)
             end
+            -- the menuLast sections (see smb.menuLast) go after the rest
             local listed, section = {}, nil
-            for _, other in ipairs(smb.macros) do
-                if smb.macroByName[other.name] == other and smb.canSequence(macro, other) then
-                    if other.category ~= section then
-                        section = other.category
-                        submenu:CreateTitle(section)
+            for _, lastPass in ipairs({false, true}) do
+                for _, other in ipairs(smb.macros) do
+                    if smb.macroByName[other.name] == other and smb.canSequence(macro, other)
+                        and smb.menuLast(other.category) == lastPass then
+                        if other.category ~= section then
+                            section = other.category
+                            submenu:CreateTitle(sectionLabel(section))
+                        end
+                        listed[other.name] = true
+                        addPick(other.name)
                     end
-                    listed[other.name] = true
-                    addPick(other.name)
                 end
             end
             -- a pick no longer learned (e.g. after a respec) or moved out of a sequence section stays listed,
@@ -196,8 +223,8 @@ local function showMacroMenu(button)
             submenu:CreateRadio("None", function() return smb.modifierSpell(macro, mod) == nil end,
                 function() pick(nil) end)
             local listed = false
-            for _, section in ipairs(sections) do
-                local sectionMenu = submenu:CreateButton(section.name)
+            for _, section in ipairs(menuOrder(sections)) do
+                local sectionMenu = submenu:CreateButton(sectionLabel(section.name))
                 for _, entry in ipairs(section) do
                     local name, onFocus = entry.name, entry.onFocus
                     listed = listed or (name == current and onFocus == currentFocus)
@@ -213,6 +240,45 @@ local function showMacroMenu(button)
                 submenu:CreateRadio(pickLabel(current, currentFocus) .. " (" .. why .. ")",
                     function() return isPicked(current, currentFocus) end,
                     function() pick(current, currentFocus) end)
+            end
+        end
+        if not smb.offersForms(macro) then return end
+        -- one submenu per form, picking the spell cast while in it from the same sections, without the
+        -- focus picks or the sections of other forms (see smb.formAllows)
+        rootDescription:CreateDivider()
+        for _, form in ipairs(smb.formNames()) do
+            local function pick(name)
+                smb.setFormSpell(macro, form, name)
+                refresh(button:GetParent()) -- rewrites the macro and its subtext
+            end
+            local current = smb.formSpell(macro, form)
+            local submenu = rootDescription:CreateButton(form .. ": " .. (current or "None"))
+            submenu:CreateTitle("Cast In " .. form .. " Form")
+            submenu:CreateRadio("None", function() return smb.formSpell(macro, form) == nil end,
+                function() pick(nil) end)
+            local listed = false
+            -- the form's own section first (see smb.formSection)
+            for _, section in ipairs(menuOrder(sections, smb.formSection(form))) do
+                local sectionMenu
+                for _, entry in ipairs(section) do
+                    if not entry.onFocus and entry.name ~= macro.name
+                        and smb.formAllows(form, smb.macroByName[entry.name]) then
+                        local name = entry.name
+                        listed = listed or name == current
+                        sectionMenu = sectionMenu or submenu:CreateButton(sectionLabel(section.name))
+                        sectionMenu:CreateRadio(name, function() return smb.formSpell(macro, form) == name end,
+                            function() pick(name) end)
+                    end
+                end
+            end
+            -- a pick no longer learned (e.g. after a respec), or from another form's section, stays listed, so
+            -- the player sees why it does nothing
+            if current and not listed then
+                local other = smb.macroByName[current]
+                local why = other and not other.unlearned and "other form" or "not learned"
+                submenu:CreateRadio(current .. " (" .. why .. ")",
+                    function() return smb.formSpell(macro, form) == current end,
+                    function() pick(current) end)
             end
         end
     end)
@@ -409,6 +475,9 @@ function setMacro(button, macro, bars)
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasSequenceOn(macro) then
         button.subText:SetText("Sequence")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif smb.hasFormOn(macro) then
+        button.subText:SetText("Forms")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasModifierOn(macro) then
         button.subText:SetText("Modifiers")
