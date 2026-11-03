@@ -145,5 +145,7 @@ smb.classConfigs.PRIEST = {
 
     stealth = {},
 
-    custom = {},
+    custom = {
+        { name = "Spam Wand", icon = 132317, body = "/castsequence !Shoot,!Shoot" },
+    },
 }
