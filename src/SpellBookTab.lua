@@ -1011,7 +1011,8 @@ local function buildPage(page)
     end)
 end
 
-LibStub("LibSpellBookTabs-1.0"):RegisterTab(addonName, {
+local LSBT = LibStub("LibSpellBookTabs-1.0")
+LSBT:RegisterTab(addonName, {
     name = "Macro Spellbook",
     icon = ICON_MACRO,
     iconTexCoords = ICON_MACRO_COORDS,
@@ -1019,4 +1020,30 @@ LibStub("LibSpellBookTabs-1.0"):RegisterTab(addonName, {
     onCreate = buildPage,
     onShow = refresh,
 })
+
+smb.ICON_MACRO, smb.ICON_MACRO_COORDS = ICON_MACRO, ICON_MACRO_COORDS
+
+-- Opens the spellbook on this page, or closes the spellbook if the page is already showing (the minimap
+-- button's click). The spellbook is protected, so not in combat.
+function smb.openPage()
+    if InCombatLockdown() then
+        UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1)
+        return
+    end
+    local book = PlayerSpellsFrame and PlayerSpellsFrame.SpellBookFrame
+    local bookShown = book ~= nil and book:IsVisible()
+    if bookShown and LSBT:IsOpen(addonName) then
+        HideUIPanel(PlayerSpellsFrame)
+        return
+    end
+    if not bookShown then
+        -- both load Blizzard_PlayerSpells on demand
+        if PlayerSpellsUtil and PlayerSpellsUtil.OpenToSpellBookTab then
+            PlayerSpellsUtil.OpenToSpellBookTab()
+        else
+            ToggleSpellBook(BOOKTYPE_SPELL)
+        end
+    end
+    LSBT:Open(addonName)
+end
 
