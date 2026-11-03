@@ -39,6 +39,13 @@ local _, smb = ...
 --   from the spell's: Before Casting, After Casting, Sequence (see Cast sequences below), and the rest, e.g.
 --   Mark of the Wild then Thorns on the nearest player while the spell's own macro casts just Mark of the Wild.
 --
+--   Every action button gets its own macro: put a spell's macro (or one of its second macros) on a second
+--   button and that button gets a numbered copy, e.g. "Fireball #2", that starts with the same options and is
+--   then set up on its own (right-click it on the bar or on the page). Taking it off the bars deletes it.
+--   Turning on a second macro from an action button's right-click menu puts it on that button; turning one
+--   off puts the spell's own macro back on its buttons. Right-clicking a plain spell placed from Blizzard's
+--   spellbook opens its macro's menu too: the first change puts the macro on that button in the spell's place.
+--
 -- cursor: ground-targeted spells that offer "Cast At Cursor" (right-click a macro): the spell lands where
 --   the cursor points, with no targeting circle to click.
 --

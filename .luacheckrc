@@ -21,15 +21,15 @@ read_globals = {
 	"C_TooltipInfo", "C_Trainer", "Enum", "EventRegistry", "EventUtil", "InputUtil", "MenuResponse", "MenuUtil",
 
 	-- Functions
-	"ClearCursor", "CreateFrame", "CreateMacro", "DeleteMacro", "EditMacro", "GetActionInfo", "GetActionText",
+	"ActionButton_GetPagedID", "ClearCursor", "CreateFrame", "CreateMacro", "DeleteMacro", "EditMacro", "GetActionInfo", "GetActionText",
 	"GetInventoryItemLink", "GetInventoryItemTexture", "GetItemSpell",
 	"GetMacroIndexByName", "GetMacroInfo", "GetNumMacros", "GetNumShapeshiftForms",
 	"GetNumSpellTabs", "GetNumTrainerServices", "GetShapeshiftFormInfo", "GetSpellBookItemInfo",
 	"GetSpellBookItemName", "GetSpellBookItemTexture", "GetSpellTabInfo", "GetSpellTexture",
-	"GetCursorPosition", "GetTrainerServiceLevelReq", "HideUIPanel", "InCombatLockdown", "InterfaceOptions_AddCategory",
-	"IsAltKeyDown", "IsHarmfulSpell", "IsPassiveSpell", "IsTradeskillTrainer", "LibStub", "PickupMacro", "PlaceAction", "PlaySound", "RunNextFrame",
-	"SpellHasRange", "tinsert", "ToggleSpellBook",
-	"UnitClass", "UnitFactionGroup", "UnitRace",
+	"GetCursorInfo", "GetCursorPosition", "GetRealmName", "GetTrainerServiceLevelReq", "HideUIPanel", "InCombatLockdown", "InterfaceOptions_AddCategory",
+	"IsAltKeyDown", "IsHarmfulSpell", "IsPassiveSpell", "IsTradeskillTrainer", "LibStub", "PickupAction", "PickupMacro", "PlaceAction", "PlaySound", "RunNextFrame",
+	"SecureHandlerWrapScript", "SpellHasRange", "tinsert", "ToggleSpellBook",
+	"UnitClass", "UnitName", "UnitFactionGroup", "UnitRace",
 
 	-- Frames / objects / constants
 	"GameTooltip", "Minimap", "PlayerSpellsFrame", "PlayerSpellsUtil", "Settings", "UIErrorsFrame", "UIParent", "UISpecialFrames", "WorldFrame",

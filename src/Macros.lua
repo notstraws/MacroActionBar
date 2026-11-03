@@ -55,7 +55,8 @@ end
 -- holds a cooldown spell's one spell name: the macro casts it on the same press, after its own. "forms"
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
 -- the class config's forms (see smb.formSpell). A focus, enemy player, nearest or combat rank copy stores its
--- own settings under its spell's name plus the copy's suffix, e.g. "Polymorph @F" (see settingKey).
+-- own settings under its spell's name plus the copy's suffix, e.g. "Polymorph @F" (see settingKey), and a
+-- per-button copy under the key of the macro it came from plus " #<n>", e.g. "Fireball #2" (see buttonCopies).
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
 local function settings(key)
     MacroSpellbookDB = MacroSpellbookDB or {}
@@ -161,6 +162,15 @@ local function optionDefault(key)
     if key == "targetEnemyBefore" then return smb.targetsEnemyByDefault() end
 end
 
+-- This character's per-button copies (see smb.newButtonCopy): {[key] = {[n] = true}}, by the settingKey of the
+-- macro each came from. MacroSpellbookDB.buttonCopyOwners ({["Fireball #2"] = "<realm>-<name>"}) holds every
+-- character's, so the numbers, which name the copies' settings and WoW macros, stay unique on the account.
+local function buttonCopies()
+    MacroSpellbookCharDB = MacroSpellbookCharDB or {}
+    MacroSpellbookCharDB.buttonCopies = MacroSpellbookCharDB.buttonCopies or {}
+    return MacroSpellbookCharDB.buttonCopies
+end
+
 local function toggleSetting(key, name)
     local set = settings(key)
     set[name] = not set[name] or nil
@@ -172,14 +182,22 @@ local COPY_OPTIONS = { focus = true, enemyPlayer = true, nearest = true, combatR
 
 -- The key a spell macro stores a setting (key, optional) under: its spell's name, or, for a focus, enemy
 -- player, nearest or combat rank copy, the name with the copy's suffix, so each copy has its own options apart
--- from its spell's macro. COPY_OPTIONS are always stored under the spell's name.
+-- from its spell's macro. A per-button copy (see smb.newButtonCopy) adds " #<n>" to the key of the macro it
+-- came from, e.g. "Fireball #2" or "Polymorph @F #2". COPY_OPTIONS are always stored under the spell's name.
 local function settingKey(macro, key)
     if COPY_OPTIONS[key] then return macro.name end
-    if macro.focus then return macro.name .. FOCUS_SUFFIX end
-    if macro.enemyPlayer then return macro.name .. ENEMY_SUFFIX end
-    if macro.nearest then return macro.name .. NEAREST_SUFFIX end
-    if macro.combatCopy then return macro.name .. COMBAT_RANK_SUFFIX end
-    return macro.name
+    local base = macro.name
+    if macro.focus then
+        base = macro.name .. FOCUS_SUFFIX
+    elseif macro.enemyPlayer then
+        base = macro.name .. ENEMY_SUFFIX
+    elseif macro.nearest then
+        base = macro.name .. NEAREST_SUFFIX
+    elseif macro.combatCopy then
+        base = macro.name .. COMBAT_RANK_SUFFIX
+    end
+    if macro.buttonCopy then return base .. " #" .. macro.buttonCopy end
+    return base
 end
 
 -- Turns a config list into a function returning a spell name's position in it, or nil. Entries ending
@@ -600,7 +618,7 @@ end
 -- casts it on the focus target, like that spell's focus copy.
 function smb.modifierSpell(macro, mod)
     if not smb.offersModifiers(macro) then return nil, false end
-    local spells = settings("modifiers")[macro.name]
+    local spells = settings("modifiers")[settingKey(macro)]
     if not (spells and spells[mod]) then return nil, false end
     return spells[mod], spells[mod .. "Focus"] == true
 end
@@ -608,7 +626,7 @@ end
 -- The equipment slot a macro uses while a modifier key is held instead of casting a spell, or nil.
 function smb.modifierSlot(macro, mod)
     if not smb.offersModifiers(macro) then return nil end
-    local spells = settings("modifiers")[macro.name]
+    local spells = settings("modifiers")[settingKey(macro)]
     return spells and spells[mod .. "Slot"]
 end
 
@@ -656,7 +674,7 @@ end
 -- The spell a macro casts while in a form (a form's name from the class config), or nil.
 function smb.formSpell(macro, form)
     if not smb.offersForms(macro) then return nil end
-    local spells = settings("forms")[macro.name]
+    local spells = settings("forms")[settingKey(macro)]
     return spells and spells[form]
 end
 
@@ -813,6 +831,10 @@ end
 -- The page's spell macros by spell name (not focus copies, custom or equipment macros), for the modifier
 -- clauses. Rebuilt with smb.macros.
 smb.macroByName = {}
+
+-- Every page macro by its WoW macro name, for finding the one on an action button (see ActionBars.lua).
+-- Rebuilt with smb.macros.
+smb.macroByMacroName = {}
 
 -- A clause casting another page macro's spell under a condition (e.g. "mod:shift"), followed by "; ", the
 -- way that spell's own page macro targets: at the mouseover or the cursor when that option is on there. With
@@ -1258,6 +1280,39 @@ local function makeMacro(name, icon, unlearned, id)
     return macro -- smb.collectMacros sets the body once every macro exists
 end
 
+-- The suffix ending a copy's WoW macro name, or "" for a spell's own macro. A per-button copy adds " #<n>".
+local function copySuffix(macro)
+    local suffix = ""
+    if macro.focus then
+        suffix = FOCUS_SUFFIX
+    elseif macro.enemyPlayer then
+        suffix = ENEMY_SUFFIX
+    elseif macro.nearest then
+        suffix = NEAREST_SUFFIX
+    elseif macro.combatCopy then
+        suffix = COMBAT_RANK_SUFFIX
+    end
+    if macro.buttonCopy then suffix = suffix .. " #" .. macro.buttonCopy end
+    return suffix
+end
+
+-- A spell name cut to limit characters but keeping its last word, e.g. "Greater B Wisdom" for "Greater
+-- Blessing of Wisdom", or nil when the last word leaves no room for the rest.
+local function keepLastWord(name, limit)
+    local last = name:match("(%S+)$")
+    if not last or #last + 2 > limit then return nil end
+    return name:sub(1, limit - #last - 1):gsub("%s+$", "") .. " " .. last
+end
+
+-- A spell macro's WoW macro name: its spell's name cut to fit, plus its copy's suffix. With keepLast, the cut
+-- keeps the spell's last word (see resolveNameClashes).
+local function spellMacroName(macro, keepLast)
+    local suffix = copySuffix(macro)
+    local limit = MAX_MACRO_NAME - #suffix
+    local base = #macro.name > limit and keepLast and keepLastWord(macro.name, limit) or macro.name:sub(1, limit)
+    return base .. suffix
+end
+
 -- A copy of a spell macro that casts on the focus target, falling back to the current target. Its menu
 -- has its own options (see settingKey); unticking its focus option removes it.
 local function makeFocusMacro(macro)
@@ -1266,7 +1321,7 @@ local function makeFocusMacro(macro)
     copy.focus = true
     copy.cursor = false
     copy.petAbility = nil
-    copy.macroName = macro.name:sub(1, MAX_MACRO_NAME - #FOCUS_SUFFIX) .. FOCUS_SUFFIX
+    copy.macroName = spellMacroName(copy)
     return copy
 end
 
@@ -1278,7 +1333,7 @@ local function makeEnemyPlayerMacro(macro)
     copy.enemyPlayer = true
     copy.cursor = false
     copy.petAbility = nil
-    copy.macroName = macro.name:sub(1, MAX_MACRO_NAME - #ENEMY_SUFFIX) .. ENEMY_SUFFIX
+    copy.macroName = spellMacroName(copy)
     return copy
 end
 
@@ -1291,7 +1346,7 @@ local function makeNearestMacro(macro)
     copy.nearest = true
     copy.cursor = false
     copy.petAbility = nil
-    copy.macroName = macro.name:sub(1, MAX_MACRO_NAME - #NEAREST_SUFFIX) .. NEAREST_SUFFIX
+    copy.macroName = spellMacroName(copy)
     return copy
 end
 
@@ -1304,7 +1359,19 @@ local function makeCombatRankMacro(macro)
     copy.combatCopy = true
     copy.raidRank1 = false
     copy.petAbility = nil
-    copy.macroName = macro.name:sub(1, MAX_MACRO_NAME - #COMBAT_RANK_SUFFIX) .. COMBAT_RANK_SUFFIX
+    copy.macroName = spellMacroName(copy)
+    return copy
+end
+
+-- A per-button copy of a page macro (see smb.newButtonCopy): the same macro under its own WoW macro name and
+-- its own settings, so one action button can differ from the others holding that macro. A per-button copy of a
+-- per-button copy is numbered among the copies of the macro they both came from.
+local function makeButtonCopy(macro, n)
+    local copy = {}
+    for key, value in pairs(macro) do copy[key] = value end
+    copy.buttonBase = macro.buttonBase or settingKey(macro)
+    copy.buttonCopy = n
+    copy.macroName = spellMacroName(copy)
     return copy
 end
 
@@ -1521,13 +1588,59 @@ local function forEachUnlearnedSpell(fn, learned)
 end
 
 -- A page macro's place among its spell's entries: the spell, then its focus copy, then its enemy player copy,
--- then its nearest copy, then its combat rank copy.
+-- then its nearest copy, then its combat rank copy, each followed by its per-button copies in number order.
 local function copyRank(macro)
-    if macro.combatCopy then return 4 end
-    if macro.nearest then return 3 end
-    if macro.enemyPlayer then return 2 end
-    if macro.focus then return 1 end
-    return 0
+    local rank = 0
+    if macro.combatCopy then
+        rank = 4
+    elseif macro.nearest then
+        rank = 3
+    elseif macro.enemyPlayer then
+        rank = 2
+    elseif macro.focus then
+        rank = 1
+    end
+    return rank * 1000 + (macro.buttonCopy or 0)
+end
+
+-- A spell macro's name ending in a number instead of its last characters (before its copy's suffix), for a
+-- clash keepLastWord can't settle.
+local function numberedMacroName(macro, n)
+    local suffix = copySuffix(macro)
+    local base = spellMacroName(macro, true):sub(1, MAX_MACRO_NAME - #suffix)
+    return base:sub(1, MAX_MACRO_NAME - #suffix - #tostring(n)) .. n .. suffix
+end
+
+-- Gives spell macros whose names cut to the same WoW macro name (e.g. every "Greater Blessing of *") names
+-- of their own, so they don't share one WoW macro. Names that don't clash are left as they are, so the macros
+-- already on the action bars keep theirs. A clashing name keeps its spell's last word ("Greater Bl Might"),
+-- and failing that ends in a number.
+local function resolveNameClashes(macros)
+    local count = {}
+    for _, macro in ipairs(macros) do count[macro.macroName] = (count[macro.macroName] or 0) + 1 end
+    local renamed = {}
+    for i, macro in ipairs(macros) do
+        if count[macro.macroName] > 1 then renamed[i] = spellMacroName(macro, true) end
+    end
+    local used = {}
+    for i, macro in ipairs(macros) do
+        local name = renamed[i] or macro.macroName
+        local n = 1
+        while used[name] do
+            n = n + 1
+            name = numberedMacroName(macro, n)
+        end
+        used[name] = true
+        macro.macroName = name
+    end
+end
+
+-- A free WoW macro name for an unlearned spell macro (taken holds the ones in use): its usual one, else one
+-- keeping its spell's last word, or nil when both are taken.
+local function freeMacroName(macro, taken)
+    if not taken[macro.macroName] then return macro.macroName end
+    local name = spellMacroName(macro, true)
+    if not taken[name] then return name end
 end
 
 -- Rebuilds smb.macros: the learned spells (from the spellbook), the class config's custom macros and the
@@ -1535,30 +1648,33 @@ end
 function smb.collectMacros()
     wipe(smb.macros)
     local taken, seen = {}, {}
+    -- appends a spell's macro and the copies its options turn on. An unlearned one takes only free names
+    -- (see freeMacroName), so it never shares a WoW macro with a learned or custom one; learned ones are
+    -- sorted out together afterwards (see resolveNameClashes).
     local function add(name, icon, unlearned, id)
         local macro = makeMacro(name, icon, unlearned, id)
-        if unlearned and taken[macro.macroName] then return end -- a custom macro already uses the name
-        taken[macro.macroName] = true
-        smb.macros[#smb.macros + 1] = macro
-        if smb.isOptionOn(macro, "focus") then
-            local copy = makeFocusMacro(macro)
-            taken[copy.macroName] = true
-            smb.macros[#smb.macros + 1] = copy
+        local group = {macro}
+        if smb.isOptionOn(macro, "focus") then group[#group + 1] = makeFocusMacro(macro) end
+        if smb.isOptionOn(macro, "enemyPlayer") then group[#group + 1] = makeEnemyPlayerMacro(macro) end
+        if smb.isOptionOn(macro, "nearest") then group[#group + 1] = makeNearestMacro(macro) end
+        if smb.isOptionOn(macro, "combatRank1") then group[#group + 1] = makeCombatRankMacro(macro) end
+        local mine = buttonCopies()
+        for i = 1, #group do
+            local numbers = {}
+            for n in pairs(mine[settingKey(group[i])] or NO_SLOTS) do numbers[#numbers + 1] = n end
+            table.sort(numbers)
+            for _, n in ipairs(numbers) do group[#group + 1] = makeButtonCopy(group[i], n) end
         end
-        if smb.isOptionOn(macro, "enemyPlayer") then
-            local copy = makeEnemyPlayerMacro(macro)
-            taken[copy.macroName] = true
-            smb.macros[#smb.macros + 1] = copy
-        end
-        if smb.isOptionOn(macro, "nearest") then
-            local copy = makeNearestMacro(macro)
-            taken[copy.macroName] = true
-            smb.macros[#smb.macros + 1] = copy
-        end
-        if smb.isOptionOn(macro, "combatRank1") then
-            local copy = makeCombatRankMacro(macro)
-            taken[copy.macroName] = true
-            smb.macros[#smb.macros + 1] = copy
+        for i, entry in ipairs(group) do
+            if unlearned then
+                entry.macroName = freeMacroName(entry, taken)
+                if not entry.macroName then
+                    if i == 1 then return end -- no name for the spell's own macro, so none for its copies
+                else
+                    taken[entry.macroName] = true
+                end
+            end
+            if entry.macroName then smb.macros[#smb.macros + 1] = entry end
         end
     end
     forEachClassSpell(function(name, icon, id)
@@ -1567,6 +1683,8 @@ function smb.collectMacros()
             add(name, icon, nil, id)
         end
     end)
+    resolveNameClashes(smb.macros)
+    for _, macro in ipairs(smb.macros) do taken[macro.macroName] = true end
     addCustomMacros(taken)
     addEquipmentMacros(taken)
     if smb.showsUnlearned() then
@@ -1591,6 +1709,11 @@ function smb.collectMacros()
     for _, macro in ipairs(smb.macros) do
         if not macro.custom then setBody(macro) end
     end
+    wipe(smb.macroByMacroName)
+    for _, macro in ipairs(smb.macros) do
+        smb.macroByMacroName[macro.macroName] = smb.macroByMacroName[macro.macroName] or macro
+    end
+    if smb.updateBarMenus then smb.updateBarMenus() end
 end
 
 -- The id of the highest rank of a spell the player knows, looked up by name, or nil.
@@ -1861,6 +1984,18 @@ local function clearFocusPicks(spell)
     end
 end
 
+local removedCopies = {} -- the WoW macro names of copies turned off since smb.takeRemovedCopies
+
+-- Notes that turning COPY_OPTIONS key off on macro (a spell's macro or one of its copies) removes that copy
+-- and its per-button copies, so the action bars can put the spell's own macro back (see ActionBars.lua).
+local function noteRemovedCopy(macro, key)
+    for _, other in ipairs(smb.macros) do
+        local matches = other.name == macro.name and (key == "focus" and other.focus or key == "enemyPlayer"
+            and other.enemyPlayer or key == "nearest" and other.nearest or key == "combatRank1" and other.combatCopy)
+        if matches then removedCopies[#removedCopies + 1] = {macroName = other.macroName, spell = macro.name, copy = other} end
+    end
+end
+
 -- smb.toggleOption without the rewrite.
 local function flipOption(macro, key)
     if EQUIPMENT_OPTIONS[key] then
@@ -1875,6 +2010,7 @@ local function flipOption(macro, key)
 end
 
 function smb.toggleOption(macro, key)
+    if COPY_OPTIONS[key] and smb.isOptionOn(macro, key) then noteRemovedCopy(macro, key) end
     flipOption(macro, key)
     rewrite(macro)
 end
@@ -1929,11 +2065,11 @@ end
 -- when onFocus, or clears it with nil, then rewrites the macro like smb.toggleOption.
 function smb.setModifierSpell(macro, mod, name, onFocus)
     local set = settings("modifiers")
-    local spells = set[macro.name] or {}
+    local spells = set[settingKey(macro)] or {}
     spells[mod] = name
     spells[mod .. "Focus"] = name and onFocus or nil
     spells[mod .. "Slot"] = nil
-    set[macro.name] = next(spells) and spells or nil
+    set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end
 
@@ -1941,9 +2077,9 @@ end
 -- then rewrites the macro like smb.toggleOption.
 function smb.setModifierSlot(macro, mod, slot)
     local set = settings("modifiers")
-    local spells = set[macro.name] or {}
+    local spells = set[settingKey(macro)] or {}
     spells[mod], spells[mod .. "Focus"], spells[mod .. "Slot"] = nil, nil, slot
-    set[macro.name] = next(spells) and spells or nil
+    set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end
 
@@ -1951,9 +2087,9 @@ end
 -- then rewrites the macro like smb.toggleOption.
 function smb.setFormSpell(macro, form, name)
     local set = settings("forms")
-    local spells = set[macro.name] or {}
+    local spells = set[settingKey(macro)] or {}
     spells[form] = name
-    set[macro.name] = next(spells) and spells or nil
+    set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end
 
@@ -2008,7 +2144,7 @@ local function storedSettings(macro)
     for _, setting in ipairs(SPELL_SETTINGS) do
         -- a copy's own settings, without the COPY_OPTIONS stored under its spell's name: resetting a copy
         -- keeps it
-        if not (isCopy(macro) and COPY_OPTIONS[setting]) then
+        if not ((isCopy(macro) or macro.buttonCopy) and COPY_OPTIONS[setting]) then
             stored[#stored + 1] = {setting, settingKey(macro, setting)}
         end
     end
@@ -2028,9 +2164,15 @@ end
 -- with their own settings, so the page must be rebuilt after.
 function smb.resetMacro(macro)
     if not smb.offersReset(macro) then return end
-    local hadFocus = not macro.equipment and not isCopy(macro) and smb.isOptionOn(macro, "focus")
+    local noCopies = macro.equipment or isCopy(macro) or macro.buttonCopy -- has no copies of its own to remove
+    local hadFocus = not noCopies and smb.isOptionOn(macro, "focus")
+    if not noCopies then
+        for key in pairs(COPY_OPTIONS) do
+            if smb.isOptionOn(macro, key) then noteRemovedCopy(macro, key) end
+        end
+    end
     local stored = storedSettings(macro)
-    if not (macro.equipment or isCopy(macro)) then
+    if not noCopies then
         for _, copy in ipairs({{focus = true}, {enemyPlayer = true}, {nearest = true}, {combatCopy = true}}) do
             copy.name = macro.name
             for _, pair in ipairs(storedSettings(copy)) do stored[#stored + 1] = pair end
@@ -2039,4 +2181,121 @@ function smb.resetMacro(macro)
     for _, pair in ipairs(stored) do settings(pair[1])[pair[2]] = nil end
     if hadFocus then clearFocusPicks(macro.name) end
     rewrite(macro)
+end
+
+-- Every action slot holding each WoW macro, as {[macro name] = {slot, ...}} in slot order, and whether any
+-- slot holds anything at all (false while the bars haven't loaded).
+function smb.macroSlots()
+    local slots, any = {}, false
+    for slot = 1, MAX_ACTION_SLOTS do
+        local name, occupied = slotMacro(slot)
+        any = any or occupied
+        if name then
+            slots[name] = slots[name] or {}
+            table.insert(slots[name], slot)
+        end
+    end
+    return slots, any
+end
+
+-- Puts a page macro on an action slot, creating its WoW macro if needed, and drops whatever the slot held.
+-- Returns false when it couldn't (in combat, too long, or no free macro slot; smb.pickupMacro reports why).
+function smb.placeMacro(macro, slot)
+    if InCombatLockdown() then return false end
+    smb.pickupMacro(macro)
+    if GetCursorInfo() ~= "macro" then
+        ClearCursor()
+        return false
+    end
+    PlaceAction(slot)
+    ClearCursor()
+    return true
+end
+
+-- Empties an action slot.
+function smb.clearSlot(slot)
+    if InCombatLockdown() then return end
+    PickupAction(slot)
+    ClearCursor()
+end
+
+-- Deletes the WoW macro with this name, if there is one.
+function smb.deleteMacroNamed(name)
+    if InCombatLockdown() then return end
+    local index = GetMacroIndexByName(name)
+    if index ~= 0 then DeleteMacro(index) end
+    generalMacros()[name] = nil
+end
+
+-- A spell's copy turned on by a COPY_OPTIONS key ("focus", "enemyPlayer", "nearest" or "combatRank1"), from
+-- smb.macros, or nil.
+function smb.copyOf(spell, key)
+    for _, macro in ipairs(smb.macros) do
+        if macro.name == spell and not macro.buttonCopy and (key == "focus" and macro.focus
+            or key == "enemyPlayer" and macro.enemyPlayer or key == "nearest" and macro.nearest
+            or key == "combatRank1" and macro.combatCopy) then
+            return macro
+        end
+    end
+end
+
+-- Whether copies were turned off since the last smb.takeRemovedCopies.
+function smb.hasRemovedCopies()
+    return #removedCopies > 0
+end
+
+-- Returns the copies turned off since the last call (see noteRemovedCopy), as {macroName, spell, copy}.
+function smb.takeRemovedCopies()
+    local removed = removedCopies
+    removedCopies = {}
+    return removed
+end
+
+local function copyValue(value)
+    if type(value) ~= "table" then return value end
+    local copy = {}
+    for k, v in pairs(value) do copy[k] = copyValue(v) end
+    return copy
+end
+
+local function characterKey()
+    return (GetRealmName() or "") .. "-" .. (UnitName("player") or "")
+end
+
+-- Makes a per-button copy of a page macro: the lowest number from 2 free on the account, starting with the
+-- macro's own settings. Rebuilds smb.macros and returns the copy from it.
+function smb.newButtonCopy(macro)
+    local base = macro.buttonBase or settingKey(macro)
+    local owners = settings("buttonCopyOwners")
+    local n = 2
+    while owners[base .. " #" .. n] do n = n + 1 end
+    owners[base .. " #" .. n] = characterKey()
+    local mine = buttonCopies()
+    mine[base] = mine[base] or {}
+    mine[base][n] = true
+    local copy = makeButtonCopy(macro, n)
+    for _, setting in ipairs(SPELL_SETTINGS) do
+        if not COPY_OPTIONS[setting] then
+            settings(setting)[settingKey(copy, setting)] = copyValue(settings(setting)[settingKey(macro, setting)])
+        end
+    end
+    smb.collectMacros()
+    for _, other in ipairs(smb.macros) do
+        if other.buttonCopy == n and other.buttonBase == base then return other end
+    end
+end
+
+-- Deletes a per-button copy: its settings, its record and its WoW macro. Rebuild smb.macros after.
+function smb.deleteButtonCopy(copy)
+    local key = copy.buttonBase .. " #" .. copy.buttonCopy
+    for _, setting in ipairs(SPELL_SETTINGS) do
+        if not COPY_OPTIONS[setting] then settings(setting)[key] = nil end
+    end
+    settings("buttonCopyOwners")[key] = nil
+    local mine = buttonCopies()
+    if mine[copy.buttonBase] then
+        mine[copy.buttonBase][copy.buttonCopy] = nil
+        if not next(mine[copy.buttonBase]) then mine[copy.buttonBase] = nil end
+    end
+    smb.deleteMacroNamed(copy.macroName)
 end
