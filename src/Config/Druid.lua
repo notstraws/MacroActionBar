@@ -3,6 +3,14 @@ local _, smb = ...
 -- The Druid page. See Config.lua for what each list does.
 smb.classConfigs.DRUID = {
     categories = {
+        { name = "Forms", menuLast = true, spells = {
+            "Cat Form",
+            "Bear Form",
+            "Dire Bear Form",
+            "Travel Form",
+            "Aquatic Form",
+            "Moonkin Form",
+        } },
         { name = "Custom" },
         { name = "Damage", cooldownSteps = true, spells = {
             "Wrath",
@@ -13,7 +21,6 @@ smb.classConfigs.DRUID = {
             "Faerie Fire",
         } },
         { name = "Cat", cooldownSteps = true, spells = {
-            "Cat Form",
             "Prowl",
             "Shred",
             "Rake",
@@ -29,8 +36,6 @@ smb.classConfigs.DRUID = {
             "Cower",
         } },
         { name = "Bear", cooldownSteps = true, spells = {
-            "Bear Form",
-            "Dire Bear Form",
             "Maul",
             "Swipe",
             "Lacerate",
@@ -64,9 +69,6 @@ smb.classConfigs.DRUID = {
             "Innervate",
             "Teleport: Moonglade",
             "Track Humanoids",
-            "Travel Form",
-            "Aquatic Form",
-            "Moonkin Form",
         } },
         { name = "Buffs & Defence", sequence = true, spells = {
             "Mark of the Wild",
@@ -123,6 +125,12 @@ smb.classConfigs.DRUID = {
 
     stealth = {
         "Prowl",
+    },
+
+    forms = {
+        { name = "Caster", section = "Damage" },
+        { name = "Cat", spells = { "Cat Form" } },
+        { name = "Bear", spells = { "Dire Bear Form", "Bear Form" } },
     },
 
     extraSpells = {
