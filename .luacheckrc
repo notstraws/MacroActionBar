@@ -27,7 +27,7 @@ read_globals = {
 	"GetNumSpellTabs", "GetNumTrainerServices", "GetShapeshiftFormInfo", "GetSpellBookItemInfo",
 	"GetSpellBookItemName", "GetSpellBookItemTexture", "GetSpellTabInfo", "GetSpellTexture",
 	"GetTrainerServiceLevelReq", "InCombatLockdown",
-	"IsHarmfulSpell", "IsPassiveSpell", "IsTradeskillTrainer", "LibStub", "PickupMacro", "PlaceAction", "PlaySound", "RunNextFrame",
+	"IsAltKeyDown", "IsHarmfulSpell", "IsPassiveSpell", "IsTradeskillTrainer", "LibStub", "PickupMacro", "PlaceAction", "PlaySound", "RunNextFrame",
 	"SpellHasRange", "tinsert",
 	"UnitClass", "UnitFactionGroup", "UnitRace",
 

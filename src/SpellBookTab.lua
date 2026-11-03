@@ -357,6 +357,42 @@ local function setAtlasOr(texture, atlas, file, scale, icon)
     return false
 end
 
+-- Shows a page button's tooltip: the game's own tooltip for the spell or item while Alt is held, otherwise
+-- the macro's.
+local function showTooltip(button)
+    local macro = button.macro
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    if IsAltKeyDown() and smb.setGameTooltip(macro) then
+        GameTooltip:Show()
+        return
+    end
+    GameTooltip:SetText(macro.name)
+    GameTooltip:AddLine(macro.body, 1, 1, 1, true)
+    if macro.tooLong then
+        GameTooltip:AddLine("Too long: " .. #macro.body .. "/255 characters. Turn off some options.",
+            1, 0.1, 0.1, true)
+    end
+    if macro.unlearned then
+        GameTooltip:AddLine("Not learned yet.", 1, 0.1, 0.1, true)
+    elseif button.glow:IsShown() then
+        GameTooltip:AddLine("Not on your action bars.", 0.5, 0.5, 0.5, true)
+    end
+    GameTooltip:AddLine("Click or drag to place on an action bar.", 0.5, 0.5, 0.5, true)
+    if smb.hasOptions(macro) then
+        GameTooltip:AddLine("Right-click for options.", 0.5, 0.5, 0.5, true)
+    end
+    local kind = smb.gameTooltipKind(macro)
+    if kind then
+        GameTooltip:AddLine("Hold Alt for the " .. kind .. "'s tooltip.", 0.5, 0.5, 0.5, true)
+    end
+    GameTooltip:Show()
+end
+
+local function leaveButton(button)
+    button:UnregisterEvent("MODIFIER_STATE_CHANGED")
+    hideTooltip(button)
+end
+
 -- Cells are reused across refreshes; setMacro points one at a macro.
 local function createMacroButton(parent)
     local button = CreateFrame("Button", nil, parent)
@@ -428,26 +464,15 @@ local function createMacroButton(parent)
         end
     end)
     button:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(self.macro.name)
-        GameTooltip:AddLine(self.macro.body, 1, 1, 1, true)
-        if self.macro.tooLong then
-            GameTooltip:AddLine("Too long: " .. #self.macro.body .. "/255 characters. Turn off some options.",
-                1, 0.1, 0.1, true)
-        end
-        if self.macro.unlearned then
-            GameTooltip:AddLine("Not learned yet.", 1, 0.1, 0.1, true)
-        elseif self.glow:IsShown() then
-            GameTooltip:AddLine("Not on your action bars.", 0.5, 0.5, 0.5, true)
-        end
-        GameTooltip:AddLine("Click or drag to place on an action bar.", 0.5, 0.5, 0.5, true)
-        if smb.hasOptions(self.macro) then
-            GameTooltip:AddLine("Right-click for options.", 0.5, 0.5, 0.5, true)
-        end
-        GameTooltip:Show()
+        self:RegisterEvent("MODIFIER_STATE_CHANGED")
+        showTooltip(self)
     end)
-    button:SetScript("OnLeave", hideTooltip)
-    button:SetScript("OnHide", hideTooltip)
+    -- pressing or releasing Alt while hovering swaps between the macro's tooltip and the game's own
+    button:SetScript("OnEvent", function(self, _, key)
+        if (key == "LALT" or key == "RALT") and GameTooltip:IsOwned(self) then showTooltip(self) end
+    end)
+    button:SetScript("OnLeave", leaveButton)
+    button:SetScript("OnHide", leaveButton)
     return button
 end
 
