@@ -135,6 +135,8 @@ smb.classConfigs.PRIEST = {
 
     offGcd = {
         "Inner Focus",
+        "Power Infusion",
+        "Shadowform",
     },
 
     channeled = {
@@ -144,6 +146,17 @@ smb.classConfigs.PRIEST = {
     },
 
     stealth = {},
+
+    toggle = {
+        "Shadowform",
+    },
+
+    extraSpells = {
+        10060, -- Power Infusion
+        14751, -- Inner Focus
+        15473, -- Shadowform
+        15286, -- Vampiric Embrace
+    },
 
     custom = {
         { name = "Spam Wand", icon = 132317, body = "/castsequence !Shoot,!Shoot" },
