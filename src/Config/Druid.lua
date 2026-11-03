@@ -3,6 +3,7 @@ local _, smb = ...
 -- The Druid page. See Config.lua for what each list does.
 smb.classConfigs.DRUID = {
     categories = {
+        { name = "Custom" },
         { name = "Forms", menuLast = true, spells = {
             "Cat Form",
             "Bear Form",
@@ -11,7 +12,6 @@ smb.classConfigs.DRUID = {
             "Aquatic Form",
             "Moonkin Form",
         } },
-        { name = "Custom" },
         { name = "Damage", cooldownSteps = true, spells = {
             "Wrath",
             "Starfire",
@@ -145,5 +145,10 @@ smb.classConfigs.DRUID = {
         1322605, -- Shifting Power
     },
 
-    custom = {},
+    custom = {
+        -- no icon, so the page and action bar show Dash's icon and tooltip from #showtooltip
+        { name = "Smart Travel",
+          body = "#showtooltip Dash\n/cast [indoors,noform:2] Cat Form\n"
+              .. "/cast [indoors,form:2] Dash\n/cast [swimming] !Aquatic Form\n/cast !Travel Form" },
+    },
 }
