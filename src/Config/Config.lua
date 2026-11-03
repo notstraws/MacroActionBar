@@ -109,7 +109,9 @@ local _, smb = ...
 --   macro targets: turn on "Cast On Mouseover" (or "Cast At Cursor") for that spell's macro and every macro
 --   using it with a modifier follows. A spell with "Cast On Focus" on is also listed as "<spell> (Focus)",
 --   the macro's own spell included: it casts on your focus target (or your target when you have none),
---   and turning that spell's focus macro off clears the pick.
+--   and turning that spell's focus macro off clears the pick. The "Equipment" submenu instead picks an
+--   equipped item with a "Use:" effect (greyed out while you wear none): the macro uses whatever is in that
+--   slot, so it keeps working after you swap the item.
 --   Alt is the game's self-cast key by default, so a helpful Alt spell with no mouseover target may land on
 --   you. Focus copies don't use modifiers. A macro can be at most 255 characters: one that grows past it
 --   says so in its tooltip and can't be placed until you turn something off.

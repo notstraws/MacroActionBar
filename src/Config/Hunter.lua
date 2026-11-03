@@ -121,10 +121,14 @@ smb.classConfigs.HUNTER = {
 
     custom = {
         -- turns on the Track spell for the target's creature type; does nothing with no target
-        { name = "One Button Tracking", category = "Tracking", first = true, icon = "Interface\\Icons\\Ability_Tracking",
+        { name = "One Button Tracking", icon = "Interface\\Icons\\Ability_Tracking",
           description = "Tracks your target's creature type, e.g. Track Beasts on a beast. Does nothing with no target.",
           body = "/run local c=UnitCreatureType(\"target\")if c then for i=1,C_Minimap.GetNumTrackingTypes()do "
               .. "local t=C_Minimap.GetTrackingInfo(i)if t and t.name:find(c,1,true)then "
               .. "C_Minimap.SetTracking(i,true)break end end end" },
+        -- recalls the pet if it has a target, otherwise sends it at yours
+        { name = "Pet Attack/Recall",
+          description = "Sends your pet to attack your target. If your pet is already attacking, calls it back to you instead. Works in combat.",
+          body = "#showtooltip Attack\n/petfollow [@pettarget,exists]\n/petattack [@pettarget,noexists]" },
     },
 }
