@@ -96,6 +96,10 @@ smb.classConfigs.HUNTER = {
         "Bestial Wrath",
     },
 
+    offGcd = {
+        "Rapid Fire",
+    },
+
     channeled = {
         "Volley",
         "Eyes of the Beast",

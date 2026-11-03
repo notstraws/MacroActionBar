@@ -114,6 +114,10 @@ smb.classConfigs.PRIEST = {
         "Power Infusion",
     },
 
+    dispels = {
+        "Dispel Magic",
+    },
+
     buffs = {
         "Power Word: Fortitude",
         "Divine Spirit",
@@ -127,6 +131,10 @@ smb.classConfigs.PRIEST = {
     cooldowns = {
         "Inner Focus",
         "Power Infusion",
+    },
+
+    offGcd = {
+        "Inner Focus",
     },
 
     channeled = {

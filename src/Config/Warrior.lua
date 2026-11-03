@@ -76,6 +76,8 @@ smb.classConfigs.WARRIOR = {
         "Sweeping Strikes",
     },
 
+    offGcd = {},
+
     channeled = {},
 
     stealth = {},

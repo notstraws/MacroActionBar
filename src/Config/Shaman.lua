@@ -100,6 +100,10 @@ smb.classConfigs.SHAMAN = {
         "Water Walking",
     },
 
+    dispels = {
+        "Purge",
+    },
+
     buffs = {
         "Water Breathing",
         "Water Walking",
@@ -112,6 +116,10 @@ smb.classConfigs.SHAMAN = {
     cooldowns = {
         "Rage of the Farseer",
         "Elemental Mastery",
+        "Nature's Swiftness",
+    },
+
+    offGcd = {
         "Nature's Swiftness",
     },
 

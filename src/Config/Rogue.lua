@@ -20,6 +20,7 @@ smb.classConfigs.ROGUE = {
             "Expose Armor",
         } },
         { name = "Utility", spells = {
+            "Blinding Powder",
             "Kick",
             "Gouge",
             "Blind",
@@ -35,7 +36,6 @@ smb.classConfigs.ROGUE = {
             "Pick Lock",
             "Detect Traps",
             "Disarm Trap",
-            "Poisons",
         } },
         { name = "Buffs & Defence", sequence = true, spells = {
             "Evasion",
@@ -44,6 +44,14 @@ smb.classConfigs.ROGUE = {
             "Adrenaline Rush",
             "Preparation",
             "Premeditation",
+        } },
+        { name = "Poisons", spells = {
+            "Poisons",
+            "Instant Poison*",
+            "Deadly Poison*",
+            "Crippling Poison*",
+            "Mind-numbing Poison*",
+            "Wound Poison*",
         } },
     },
 
@@ -67,6 +75,12 @@ smb.classConfigs.ROGUE = {
         "Cold Blood",
         "Blade Flurry",
         "Adrenaline Rush",
+        "Premeditation",
+    },
+
+    offGcd = {
+        "Cold Blood",
+        "Premeditation",
     },
 
     channeled = {},

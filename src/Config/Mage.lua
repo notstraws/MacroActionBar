@@ -4,20 +4,25 @@ local _, smb = ...
 smb.classConfigs.MAGE = {
     categories = {
         { name = "Custom" },
-        { name = "Damage", cooldownSteps = true, spells = {
-            "Frostbolt",
-            "Fireball",
-            "Frostfire Bolt",
+        { name = "Arcane", cooldownSteps = true, spells = {
             "Arcane Blast",
-            "Ice Lance",
+            "Arcane Missiles",
+            "Arcane Explosion",
+            "Arcane Wrath",
+        } },
+        { name = "Fire", cooldownSteps = true, spells = {
+            "Fireball",
             "Fire Blast",
             "Scorch",
             "Pyroblast",
-            "Arcane Missiles",
-            "Arcane Explosion",
             "Flamestrike",
-            "Blizzard",
             "Blast Wave",
+        } },
+        { name = "Frost", cooldownSteps = true, spells = {
+            "Frostbolt",
+            "Frostfire Bolt",
+            "Ice Lance",
+            "Blizzard",
             "Cone of Cold",
             "Frost Nova",
         } },
@@ -29,9 +34,6 @@ smb.classConfigs.MAGE = {
             "Remove Lesser Curse",
             "Evocation",
             "Comprehend Scroll",
-            "Conjure *",
-            "Teleport: *",
-            "Portal: *",
             "Presence of Mind",
             "Arcane Power",
             "Combustion",
@@ -51,6 +53,13 @@ smb.classConfigs.MAGE = {
             "Ice Barrier",
             "Ice Block",
         } },
+        { name = "Conjure", spells = {
+            "Conjure *",
+        } },
+        { name = "Teleports & Portals", spells = {
+            "Teleport: *",
+            "Portal: *",
+        } },
     },
 
     mouseoverEnemy = {
@@ -58,6 +67,7 @@ smb.classConfigs.MAGE = {
         "Fireball",
         "Frostfire Bolt",
         "Arcane Blast",
+        "Arcane Wrath",
         "Ice Lance",
         "Fire Blast",
         "Scorch",
@@ -86,7 +96,18 @@ smb.classConfigs.MAGE = {
         "Blizzard",
     },
 
+    combatRank1 = {
+        "Arcane Explosion",
+        "Flamestrike",
+    },
+
     cooldowns = {
+        "Presence of Mind",
+        "Arcane Power",
+        "Combustion",
+    },
+
+    offGcd = {
         "Presence of Mind",
         "Arcane Power",
         "Combustion",
@@ -102,6 +123,7 @@ smb.classConfigs.MAGE = {
 
     extraSpells = {
         28272, -- Polymorph: Pig
+        1326079, -- Arcane Wrath (talent)
     },
 
     custom = {},

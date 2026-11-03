@@ -106,6 +106,8 @@ smb.classConfigs.WARLOCK = {
         "Amplify Curse",
     },
 
+    offGcd = {},
+
     channeled = {
         "Drain Life",
         "Drain Mana",

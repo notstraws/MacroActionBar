@@ -94,6 +94,8 @@ smb.classConfigs.PALADIN = {
         "Divine Favor",
     },
 
+    offGcd = {},
+
     channeled = {},
 
     stealth = {},
