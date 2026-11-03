@@ -4,20 +4,24 @@ local _, smb = ...
 smb.classConfigs.ROGUE = {
     categories = {
         { name = "Custom" },
-        { name = "Damage", cooldownSteps = true, spells = {
-            "Sinister Strike",
-            "Backstab",
+        { name = "Assassination", cooldownSteps = true, spells = {
             "Mutilate",
-            "Hemorrhage",
-            "Ghostly Strike",
-            "Riposte",
-            "Ambush",
-            "Garrote",
             "Eviscerate",
             "Rupture",
             "Slice and Dice",
             "Venom",
             "Expose Armor",
+        } },
+        { name = "Combat", cooldownSteps = true, spells = {
+            "Sinister Strike",
+            "Backstab",
+            "Riposte",
+        } },
+        { name = "Subtlety", cooldownSteps = true, spells = {
+            "Hemorrhage",
+            "Ghostly Strike",
+            "Ambush",
+            "Garrote",
         } },
         { name = "Utility", spells = {
             "Blinding Powder",

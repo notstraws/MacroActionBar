@@ -4,24 +4,26 @@ local _, smb = ...
 smb.classConfigs.WARLOCK = {
     categories = {
         { name = "Custom" },
-        { name = "Damage", cooldownSteps = true, spells = {
-            "Shadow Bolt",
-            "Immolate",
-            "Incinerate",
+        { name = "Affliction", cooldownSteps = true, spells = {
             "Corruption",
             "Wrack",
             "Bane of *",
             "Curse of *",
             "Siphon Life",
+            "Drain Life",
+            "Drain Soul",
+            "Amplify Curse",
+        } },
+        { name = "Destruction", cooldownSteps = true, spells = {
+            "Shadow Bolt",
+            "Immolate",
+            "Incinerate",
             "Searing Pain",
             "Shadowburn",
             "Conflagrate",
             "Soul Fire",
-            "Drain Life",
-            "Drain Soul",
             "Hellfire",
             "Rain of Fire",
-            "Amplify Curse",
         } },
         { name = "Utility", spells = {
             "Fel Domination",
@@ -135,6 +137,7 @@ smb.classConfigs.WARLOCK = {
         18708, -- Fel Domination
         19028, -- Soul Link
         1225228, --  Bane of Havoc
+        688, -- Summon Imp
         697, -- Summon Voidwalker
         712, -- Summon Succubus
         713, -- Summon Incubus

@@ -126,5 +126,7 @@ smb.classConfigs.MAGE = {
         1326079, -- Arcane Wrath (talent)
     },
 
-    custom = {},
+    custom = {
+        { name = "Spam Wand", icon = 132317, body = "/castsequence !Shoot,!Shoot" },
+    },
 }
