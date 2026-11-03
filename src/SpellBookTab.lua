@@ -4,6 +4,8 @@ local addonName, smb = ...
 -- the parchment page; this file only draws smb.macros (built by Macros.lua) onto the page.
 
 local ICON_MACRO = "Interface\\MacroFrame\\MacroFrame-Icon" -- the "M" key shown on Blizzard's macro window
+-- the icon is a round portrait; crop to the square inside its border so the tab shows just the "M"
+local ICON_MACRO_COORDS = {0.15, 0.85, 0.15, 0.85}
 
 local function hideTooltip(owner)
     if GameTooltip:IsOwned(owner) then GameTooltip:Hide() end
@@ -222,7 +224,9 @@ end
 local VIEW_WIDTH, VIEW_TOP, VIEW_LEFT, VIEW_RIGHT, VIEW_BOTTOM = 680, -35, 85, 50, 75
 local COLUMNS, CELL_HEIGHT, CATEGORY_GAP = 3, 52, 12
 local FOOTER_BOTTOM = 46 -- the footer's bottom edge, roughly level with the paging arrows (40 up)
-local CELL_WIDTH = VIEW_WIDTH / COLUMNS
+-- the book can be narrower than the native views: a minimized book's single page keeps this much off each
+-- edge, and an open book's pages keep this much off the spine
+local MIN_MARGIN, SPINE_GAP = 30, 30
 local ICON_SIZE = 36
 
 -- parchment ink, matching the native spell names and subtext
@@ -432,14 +436,13 @@ end
 
 -- The same category bar the native page draws over each skill line.
 local function createHeader(parent)
-    local header = CreateFrame("Frame", nil, parent, "SpellBookHeaderTemplate")
-    header:SetWidth(VIEW_WIDTH)
-    return header
+    return CreateFrame("Frame", nil, parent, "SpellBookHeaderTemplate")
 end
 
-local function setHeader(header, text)
+local function setHeader(header, text, width)
+    header:SetWidth(width)
     header.Text:SetText(text)
-    header.Backplate:SetWidth(math.min(VIEW_WIDTH + 85, math.max(416, header.Text:GetStringWidth() * 2.5)))
+    header.Backplate:SetWidth(math.min(width + 85, math.max(416, header.Text:GetStringWidth() * 2.5)))
 end
 
 -- Acquire hands out pooled frames in order; ReleaseAll hides the ones from the last layout.
@@ -462,7 +465,7 @@ end
 
 -- Splits the macros into page halves of {header = text, y} and {macro, column, y} entries. A category
 -- flows top to bottom and repeats its header when it carries over to the next half.
-local function paginate(height, headerHeight)
+local function paginate(height, headerHeight, columns)
     local halves, half, y = {}, nil, 0
     local function newHalf()
         half, y = {}, 0
@@ -482,7 +485,7 @@ local function paginate(height, headerHeight)
                 if y + headerHeight + CELL_HEIGHT > height then newHalf() end
             end
             addHeader(category)
-        elseif column == COLUMNS then
+        elseif column == columns then
             column = 0
             y = y + CELL_HEIGHT
             if y + CELL_HEIGHT > height then
@@ -502,15 +505,26 @@ local function layout(page)
     page.buttons:ReleaseAll()
     local controls = page.pagingControls
     local width, height = page:GetWidth(), page:GetHeight()
-    local spread = width >= 2 * VIEW_WIDTH and 2 or 1
-    -- a minimized book shows one page, centred; an open one uses the native left and right pages
-    local origins = spread == 2 and {VIEW_LEFT, width - VIEW_RIGHT - VIEW_WIDTH} or {(width - VIEW_WIDTH) / 2}
+    -- the book's own minimize/maximize state, so a two-page book narrower than two native views still
+    -- gets both pages; the width check is a fallback for a build without the flag
+    local minimized = PlayerSpellsFrame.SpellBookFrame.isMinimized
+    if minimized == nil then minimized = width < 2 * VIEW_WIDTH end
+    local spread = minimized and 1 or 2
+    -- a minimized book shows one page, centred; an open one uses the native left and right pages. Each is
+    -- narrowed to fit, with fewer columns when it's too narrow for three
+    local viewWidth = spread == 2 and math.min(VIEW_WIDTH, width / 2 - VIEW_LEFT - SPINE_GAP)
+        or math.min(VIEW_WIDTH, width - 2 * MIN_MARGIN)
+    local columns = math.max(1, math.min(COLUMNS, math.floor(viewWidth / ITEM_WIDTH)))
+    local cellWidth = viewWidth / columns
+    local origins = spread == 2 and {VIEW_LEFT, width - VIEW_RIGHT - viewWidth} or {(width - viewWidth) / 2}
     page.footer:ClearAllPoints()
     page.footer:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", origins[1] + 8, FOOTER_BOTTOM)
+    -- stops short of the paging arrows, wrapping upward when the page is narrow
+    page.footer:SetWidth(spread == 2 and viewWidth - 16 or viewWidth - 180)
     if #smb.macros == 0 then
         local header = page.headers:Acquire()
         header:SetPoint("TOPLEFT", page, "TOPLEFT", origins[1], VIEW_TOP)
-        setHeader(header, "Macro Spellbook")
+        setHeader(header, "Macro Spellbook", viewWidth)
         page.empty:SetText("No macros found.")
         page.empty:ClearAllPoints()
         page.empty:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 8, -12)
@@ -523,7 +537,7 @@ local function layout(page)
     local headerHeight = math.max(page.headers:Acquire():GetHeight(), 30) + 8
     page.headers:ReleaseAll()
 
-    local halves = paginate(height + VIEW_TOP - VIEW_BOTTOM, headerHeight)
+    local halves = paginate(height + VIEW_TOP - VIEW_BOTTOM, headerHeight, columns)
     local maxPages = math.ceil(#halves / spread)
     page.paging = true
     controls:SetMaxPages(maxPages)
@@ -537,10 +551,10 @@ local function layout(page)
             if entry.header then
                 local header = page.headers:Acquire()
                 header:SetPoint("TOPLEFT", page, "TOPLEFT", x, VIEW_TOP - entry.y)
-                setHeader(header, entry.header)
+                setHeader(header, entry.header, viewWidth)
             else
                 local button = page.buttons:Acquire()
-                button:SetPoint("TOPLEFT", page, "TOPLEFT", x + entry.column * CELL_WIDTH + 8, VIEW_TOP - entry.y - 4)
+                button:SetPoint("TOPLEFT", page, "TOPLEFT", x + entry.column * cellWidth + 8, VIEW_TOP - entry.y - 4)
                 setMacro(button, entry.macro, bars)
             end
         end
@@ -572,7 +586,13 @@ local function buildPage(page)
     local options = CreateFrame("DropdownButton", nil, page.header, "SpellBookSettingsDropdownTemplate")
     page.options = options
     options:ClearAllPoints()
-    options:SetPoint("TOPRIGHT", page.header, "TOPRIGHT", -30, -27)
+    -- pinned to the native cog so it follows the native toolbar's layout; the offset is a fallback
+    local native = PlayerSpellsFrame.SpellBookFrame.SettingsDropdown
+    if native then
+        options:SetAllPoints(native)
+    else
+        options:SetPoint("TOPRIGHT", page.header, "TOPRIGHT", -30, -27)
+    end
     options:SetupMenu(function(_, rootDescription)
         rootDescription:CreateTitle("Settings")
         rootDescription:CreateCheckbox("Show unlearned spells", smb.showsUnlearned, function()
@@ -593,6 +613,10 @@ local function buildPage(page)
                 smb.setPetAttacksByDefault(not smb.petAttacksByDefault())
                 refresh(page) -- rewrites the macros that follow the default
             end)
+        end
+        if smb.classOffersStopCast() or smb.classOffersStartAttack() then
+            rootDescription:CreateDivider()
+            rootDescription:CreateTitle("Global Macro Settings")
         end
         if smb.classOffersStopCast() then
             rootDescription:CreateCheckbox("Stop casting before spell cast", smb.stopsCastingByDefault, function()
@@ -624,7 +648,15 @@ local function buildPage(page)
         if controls:IsShown() then controls:OnMouseWheel(delta) end
     end)
 
-    page:SetScript("OnSizeChanged", function(self) if self:IsVisible() then layout(self) end end)
+    -- the minimize button resizes the book; lay out a frame later, once the book's isMinimized has caught up
+    page:SetScript("OnSizeChanged", function(self)
+        if self.resizePending then return end
+        self.resizePending = true
+        C_Timer.After(0, function()
+            self.resizePending = false
+            if self:IsVisible() then layout(self) end
+        end)
+    end)
     page:RegisterEvent("SPELLS_CHANGED")
     page:RegisterEvent("PLAYER_EQUIPMENT_CHANGED") -- the Equipment section follows the gear worn
     -- unlearned spells whose names weren't loaded were skipped; redraw once a burst of them arrives
@@ -658,6 +690,7 @@ end
 LibStub("LibSpellBookTabs-1.0"):RegisterTab(addonName, {
     name = "Macro Spellbook",
     icon = ICON_MACRO,
+    iconTexCoords = ICON_MACRO_COORDS,
     onCreate = buildPage,
     onShow = refresh,
 })

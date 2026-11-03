@@ -8,6 +8,7 @@ out together and only one addon page is open at a time.
     LSBT:RegisterTab("MyAddon", {
         name = "My Addon",          -- tooltip
         icon = 134400,              -- texture path or fileID
+        iconTexCoords = {0, 1, 0, 1}, -- optional (MINOR 5+): left, right, top, bottom crop of the icon
         onCreate = function(page) end, -- build the page's contents; called once, on first open
         onShow = function(page) end,   -- optional
         onHide = function(page) end,   -- optional
@@ -35,7 +36,7 @@ down the book's right edge.
 Nothing Blizzard owns is written to: everything is layered over the book.
 ]]
 
-local MAJOR, MINOR = "LibSpellBookTabs-1.0", 4
+local MAJOR, MINOR = "LibSpellBookTabs-1.0", 5
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -66,13 +67,14 @@ local function hideTooltip(owner)
     if GameTooltip:IsOwned(owner) then GameTooltip:Hide() end
 end
 
-local function makeTab(parent, icon)
+local function makeTab(parent, icon, texCoords)
     local button = own(CreateFrame("Button", nil, parent))
     button:SetSize(TAB_WIDTH, TAB_HEIGHT)
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetSize(34, 33)
     button.icon:SetPoint("BOTTOM", -1, 0)
     button.icon:SetTexture(icon)
+    if texCoords then button.icon:SetTexCoord(unpack(texCoords)) end
     local function frameArt(atlas, y)
         local texture = button:CreateTexture(nil, "ARTWORK", nil, 1)
         texture:SetAtlas(atlas, true)
@@ -226,6 +228,23 @@ local function nextFreeColumnSlot(obstacles, y, height, left, right, gap)
     return y
 end
 
+-- the right edge of the last shown native tab and the gap between native tabs, in screen pixels, so our tabs
+-- continue the native row's spacing (the tab system frame itself runs past its last tab)
+local function nativeRowMetrics(nativeTabs)
+    local rects = {}
+    for _, button in ipairs(nativeTabs.tabs or {}) do
+        if button:IsShown() then
+            local left, _, right = screenRect(button)
+            if left then rects[#rects + 1] = {left = left, right = right} end
+        end
+    end
+    if #rects == 0 then return end
+    table.sort(rects, function(a, b) return a.left < b.left end)
+    local gap
+    if #rects > 1 then gap = rects[2].left - rects[1].right end
+    return rects[#rects].right, gap
+end
+
 function lib:Layout()
     local book = self.book
     local nativeTabs = book.CategoryTabSystem
@@ -235,6 +254,8 @@ function lib:Layout()
     if not tabsLeft or not bookRight then return end
     local searchLeft = screenRect(book.SearchBox)
     local width, height, gap = TAB_WIDTH * scale, TAB_HEIGHT * scale, GAP * scale
+    local lastNativeRight, nativeGap = nativeRowMetrics(nativeTabs)
+    if nativeGap and nativeGap >= 0 and nativeGap < width then gap = nativeGap end
     local obstacles = collectObstacles(width, height)
 
     local centerY = (tabsBottom + tabsTop) / 2
@@ -249,7 +270,7 @@ function lib:Layout()
             and rect.top < bookTop + height and rect.bottom > bookBottom
         if (byTabs or byEdge) and not blizzard[rect.frame] then self:HookLauncher(rect.frame) end
     end
-    local x = tabsRight + gap
+    local x = (lastNativeRight or tabsRight) + gap
     local columnTop = tabsTop
     local inRow = true
     for _, tab in ipairs(self.tabs) do
@@ -384,7 +405,7 @@ function lib:HookForeign()
 end
 
 function lib:CreateButton(tab)
-    local button = makeTab(PlayerSpellsFrame, tab.icon)
+    local button = makeTab(PlayerSpellsFrame, tab.icon, tab.iconTexCoords)
     tab.button = button
     button:Hide()
     button:SetScript("OnClick", function()
@@ -457,6 +478,7 @@ function lib:RegisterTab(id, info)
         id = id,
         name = info.name,
         icon = info.icon or 134400, -- Interface\Icons\INV_Misc_QuestionMark
+        iconTexCoords = info.iconTexCoords,
         onCreate = info.onCreate,
         onShow = info.onShow,
         onHide = info.onHide,
