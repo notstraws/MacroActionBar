@@ -820,8 +820,6 @@ local function buildPage(page)
     local search = CreateFrame("EditBox", nil, page.header, "SearchBoxTemplate")
     page.search = search
     search:SetAutoFocus(false)
-    -- no "Search" placeholder; the template reshows the font string as the text empties, so blank it instead
-    if search.Instructions then search.Instructions:SetText("") end
     local nativeSearch = PlayerSpellsFrame.SpellBookFrame.SearchBox
     if nativeSearch then
         search:SetAllPoints(nativeSearch)
