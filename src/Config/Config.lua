@@ -43,6 +43,11 @@ local _, smb = ...
 -- stealth: stealth spells that offer "Stay In Stealth On Recast" (right-click a macro): the cast gets a [nostealth]
 --   condition, so pressing the macro again while stealthed doesn't take you out of stealth.
 --
+-- toggle: spells that turn off when cast again, such as Auto Shot and aspects, that offer "Don't Toggle Off
+--   On Recast" (right-click a macro): the macro casts "!<spell>", so pressing it again while the spell is on
+--   doesn't turn it off and you can spam the button. Picked for a modifier key on another macro, the
+--   spell is always cast as "!<spell>".
+--
 -- cooldowns: spells such as Rage of the Farseer that offer the "Sequence" menu (see Cast sequences below)
 --   in whatever section they are. Their menu also lists the spells in cooldownSteps = true sections, so the
 --   cooldown can be followed by damage or healing spells, e.g. Lightning Bolt. To use a trinket with it,
