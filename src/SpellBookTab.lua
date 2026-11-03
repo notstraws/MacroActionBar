@@ -186,7 +186,9 @@ local function showMacroMenu(button)
                     if not listed[slot] then slots[#slots + 1] = slot end
                 end
             end
-            if #lines == 0 and #slots == 0 then return end
+            -- with no on-use item equipped, a greyed-out line shows where one would be listed
+            local noItems = smb.offersUseItems(macro) and #slots == 0
+            if #lines == 0 and #slots == 0 and not noItems then return end
             local title = side == "before" and "Before Casting" or "After Casting"
             local submenu = rootDescription:CreateButton(title)
             submenu:CreateTitle(title)
@@ -198,7 +200,7 @@ local function showMacroMenu(button)
                     return MenuResponse.Refresh -- renumbers the other labels
                 end), label, id)
             end
-            if #lines > 0 and #slots > 0 then submenu:CreateDivider() end
+            if #lines > 0 and (#slots > 0 or noItems) then submenu:CreateDivider() end
             for _, slot in ipairs(slots) do
                 local label = smb.slotLabel(slot)
                 livePlaced(submenu:CreateCheckbox(placed(label, slot),
@@ -208,6 +210,9 @@ local function showMacroMenu(button)
                         refresh(button:GetParent()) -- rewrites the focus copy too
                         return MenuResponse.Refresh -- renumbers the other labels
                     end), label, slot)
+            end
+            if noItems then
+                submenu:CreateButton("No On-Use Item Equipped"):SetEnabled(false)
             end
         end
         addSide("before")
@@ -243,12 +248,18 @@ local function showMacroMenu(button)
                 smb.setModifierSpell(macro, mod, name, onFocus)
                 refresh(button:GetParent()) -- rewrites the macro and its subtext
             end
+            local function pickSlot(slot)
+                smb.setModifierSlot(macro, mod, slot)
+                refresh(button:GetParent()) -- rewrites the macro and its subtext
+            end
             local current, currentFocus = smb.modifierSpell(macro, mod)
-            local submenu = rootDescription:CreateButton(label .. ": "
-                .. (current and pickLabel(current, currentFocus) or "None"))
+            local currentSlot = smb.modifierSlot(macro, mod)
+            local submenu = rootDescription:CreateButton(label .. ": " .. (currentSlot and smb.slotLabel(currentSlot)
+                or current and pickLabel(current, currentFocus) or "None"))
             submenu:CreateTitle("Cast While " .. label .. " Is Held")
-            submenu:CreateRadio("None", function() return smb.modifierSpell(macro, mod) == nil end,
-                function() pick(nil) end)
+            submenu:CreateRadio("None", function()
+                return smb.modifierSpell(macro, mod) == nil and smb.modifierSlot(macro, mod) == nil
+            end, function() pick(nil) end)
             local listed = false
             for _, section in ipairs(menuOrder(sections)) do
                 local sectionMenu = submenu:CreateButton(sectionLabel(section.name))
@@ -267,6 +278,24 @@ local function showMacroMenu(button)
                 submenu:CreateRadio(pickLabel(current, currentFocus) .. " (" .. why .. ")",
                     function() return isPicked(current, currentFocus) end,
                     function() pick(current, currentFocus) end)
+            end
+            -- the equipped on-use items, greyed out while none is worn
+            local usable = smb.usableSlots()
+            local equipMenu = submenu:CreateButton("Equipment")
+            equipMenu:SetEnabled(usable[1] ~= nil)
+            local slotListed = false
+            for _, entry in ipairs(usable) do
+                local slot = entry.slot
+                slotListed = slotListed or slot == currentSlot
+                equipMenu:CreateRadio(smb.slotLabel(slot), function() return smb.modifierSlot(macro, mod) == slot end,
+                    function() pickSlot(slot) end)
+            end
+            -- a picked slot whose item has no use effect now (e.g. after a gear swap) stays listed, so the player
+            -- sees why it does nothing
+            if currentSlot and not slotListed then
+                submenu:CreateRadio(smb.slotLabel(currentSlot) .. " (no use effect)",
+                    function() return smb.modifierSlot(macro, mod) == currentSlot end,
+                    function() pickSlot(currentSlot) end)
             end
         end
         if not smb.offersForms(macro) then return end

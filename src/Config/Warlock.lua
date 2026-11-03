@@ -148,5 +148,9 @@ smb.classConfigs.WARLOCK = {
           body = "#showtooltip\n/cast Fire Shield\n/cast Sacrifice\n/cast Spell Lock\n/cast Seduction" },
         { name = "Pet Ability (Mouseover)", icon = 618980,
           body = "#showtooltip\n/cast [pet:Voidwalker] Sacrifice; [pet:imp] Fire shield; [pet:succubus,@mouseover,exists,nodead][pet:succubus,@target] Seduction; [pet:felhunter,@mouseover,exists,nodead][pet:felhunter,@target] Devour Magic;" },
+        -- recalls the pet if it has a target, otherwise sends it at yours
+        { name = "Pet Attack/Recall",
+          description = "Sends your pet to attack your target. If your pet is already attacking, calls it back to you instead. Works in combat.",
+          body = "#showtooltip Attack\n/petfollow [@pettarget,exists]\n/petattack [@pettarget,noexists]" },
     },
 }

@@ -41,7 +41,8 @@ end
 -- "equipStopAttack" and "equipStopCast" are keyed by inventory slot rather than spell name: the equipment macro
 -- for that slot starts with /stopattack (or /stopcasting) before using the item. "modifiers" holds a table
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held,
--- on the focus target when shiftFocus (ctrlFocus, altFocus) is true (see smb.modifierSpell). "sequence" holds a
+-- on the focus target when shiftFocus (ctrlFocus, altFocus) is true (see smb.modifierSpell), or uses the item in
+-- equipment slot shiftSlot (ctrlSlot, altSlot) instead (see smb.modifierSlot). "sequence" holds a
 -- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "forms"
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
 -- the class config's forms (see smb.formSpell).
@@ -472,10 +473,17 @@ function smb.modifierSpell(macro, mod)
     return spells[mod], spells[mod .. "Focus"] == true
 end
 
--- Whether a macro has a spell set for any modifier key.
+-- The equipment slot a macro uses while a modifier key is held instead of casting a spell, or nil.
+function smb.modifierSlot(macro, mod)
+    if not smb.offersModifiers(macro) then return nil end
+    local spells = settings("modifiers")[macro.name]
+    return spells and spells[mod .. "Slot"]
+end
+
+-- Whether a macro has a spell or an equipment slot set for any modifier key.
 function smb.hasModifierOn(macro)
     for _, mod in ipairs(smb.MODIFIERS) do
-        if smb.modifierSpell(macro, mod) then return true end
+        if smb.modifierSpell(macro, mod) or smb.modifierSlot(macro, mod) then return true end
     end
     return false
 end
@@ -649,13 +657,17 @@ end
 -- spell, such as an aspect, is always cast as "!<spell>", so holding the key and pressing again never
 -- toggles it off. A focus pick casts like the spell's focus copy, on the focus target or else the target,
 -- but without switching target back after. A spell that isn't learned is left out, keeping its setting. So is a focus pick whose
--- spell has no focus copy, which only old saved data can hold: removing the copy clears its picks.
+-- spell has no focus copy, which only old saved data can hold: removing the copy clears its picks. An
+-- equipment pick uses whatever is in its slot, e.g. "[mod:ctrl] 13; ", like the useItems lines.
 local function modifierClauses(macro)
     local clauses = {}
     for _, mod in ipairs(smb.MODIFIERS) do
         local name, onFocus = smb.modifierSpell(macro, mod)
         local other = smb.macroByName[name or ""]
-        if other and not other.unlearned and (not onFocus or smb.isOptionOn(other, "focus")) then
+        local slot = smb.modifierSlot(macro, mod)
+        if slot then
+            clauses[#clauses + 1] = "[mod:" .. mod .. "] " .. slot .. "; "
+        elseif other and not other.unlearned and (not onFocus or smb.isOptionOn(other, "focus")) then
             if onFocus then
                 local held = "[mod:" .. mod
                 clauses[#clauses + 1] = held .. ",@focus," .. other.target .. ",nodead]" .. held .. "] "
@@ -1057,6 +1069,13 @@ local function showtooltipIcon(body)
     if spell and getSpellTexture then return getSpellTexture(spell) end
 end
 
+-- The icon as CreateMacro takes it: a file ID, or a bare texture name in Interface\Icons. A full texture
+-- path (as the config allows) is reduced to its file name.
+local function macroIconName(icon)
+    if type(icon) ~= "string" then return icon end
+    return icon:match("[^\\/]+$")
+end
+
 -- A config custom entry as a page macro. Its body is used as written, and it has no options menu.
 local function makeCustomMacro(entry, index, categoryRank)
     return {
@@ -1069,7 +1088,7 @@ local function makeCustomMacro(entry, index, categoryRank)
         description = type(entry.description) == "string" and entry.description or nil,
         cursor = false,
         macroName = entry.name:sub(1, MAX_MACRO_NAME),
-        macroIcon = entry.icon or ICON_QUESTION_MARK,
+        macroIcon = macroIconName(entry.icon) or ICON_QUESTION_MARK,
         icon = entry.icon or showtooltipIcon(entry.body) or ICON_QUESTION_MARK,
         tooltipSpell = showtooltipSpell(entry.body),
         body = entry.body,
@@ -1395,6 +1414,10 @@ function smb.pickupMacro(macro)
             reportMacrosFull(macro.equipment)
             return
         end
+    elseif macro.custom then
+        -- also rewrites the icon, which the config can change and which older versions saved as a full path
+        -- (such a macro would not pick up)
+        index = EditMacro(index, nil, macro.macroIcon, macro.body) or index
     else
         syncMacro(macro, index)
     end
@@ -1646,6 +1669,17 @@ function smb.setModifierSpell(macro, mod, name, onFocus)
     local spells = set[macro.name] or {}
     spells[mod] = name
     spells[mod .. "Focus"] = name and onFocus or nil
+    spells[mod .. "Slot"] = nil
+    set[macro.name] = next(spells) and spells or nil
+    rewrite(macro)
+end
+
+-- Sets the equipment slot a macro uses while a modifier key is held, replacing any spell set for that key,
+-- then rewrites the macro like smb.toggleOption.
+function smb.setModifierSlot(macro, mod, slot)
+    local set = settings("modifiers")
+    local spells = set[macro.name] or {}
+    spells[mod], spells[mod .. "Focus"], spells[mod .. "Slot"] = nil, nil, slot
     set[macro.name] = next(spells) and spells or nil
     rewrite(macro)
 end
