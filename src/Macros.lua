@@ -439,15 +439,15 @@ end
 
 -- The section a form's submenu lists first: the form config's section, else the one named after the form.
 function smb.formSection(form)
-    for _, config in ipairs(classConfig().forms) do
-        if config.name == form then return config.section or form end
+    for _, entry in ipairs(classConfig().forms) do
+        if entry.name == form then return entry.section or form end
     end
 end
 
 -- Whether a section (a category's name) is listed last in the right-click submenus: menuLast = true.
 function smb.menuLast(category)
-    for _, config in ipairs(classConfig().categories) do
-        if config.name == category then return config.menuLast == true end
+    for _, section in ipairs(classConfig().categories) do
+        if section.name == category then return section.menuLast == true end
     end
     return false
 end
