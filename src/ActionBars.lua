@@ -42,30 +42,15 @@ local function buttonMacro(button)
     return name and smb.macroByMacroName[name], false
 end
 
--- Before the first change in a plain spell button's menu: puts the spell's macro on the button in the
--- spell's place, or a per-button copy of it when the macro is already on another button, so the change
--- applies to this button alone. Returns that macro, or nil when it couldn't be placed (smb.pickupMacro said
--- why), which skips the change.
-local function placeForSpell(macro, slot)
-    if InCombatLockdown() then return nil end
-    local copy = smb.macroSlots()[macro.macroName] and smb.newButtonCopy(macro)
-    local target = copy or macro
-    if smb.placeMacro(target, slot) then return target end
-    if copy then
-        smb.deleteButtonCopy(copy)
-        smb.collectMacros()
-    end
-end
-
+-- The menu's changes apply to this button alone when other buttons hold the same macro, and a plain spell's
+-- first change puts its macro on the button in the spell's place (see smb.editMacro).
 local function showMenu(button)
     if InCombatLockdown() then return end
     smb.collectMacros() -- the page may never have been opened, or its spells may have changed
     local macro, plainSpell = buttonMacro(button)
     if not macro then return end
     if GameTooltip:IsOwned(button) then GameTooltip:Hide() end
-    local slot = buttonSlot(button)
-    local prepare = plainSpell and function() return placeForSpell(macro, slot) end or nil
-    smb.showMacroMenu(button, macro, smb.refreshPage, slot, prepare)
+    smb.showMacroMenu(button, macro, smb.refreshPage, buttonSlot(button), plainSpell)
 end
 
 -- Flags each wrapped button whose slot holds a page macro with options. Attributes on secure buttons can't
@@ -109,22 +94,14 @@ local function scheduleUpdate()
     end)
 end
 
--- Every action button gets its own macro: when one of the page's spell macros is on several slots, each slot
--- but one gets a per-button copy of it (see smb.newButtonCopy), so the buttons can be set up differently. A
--- per-button copy on no slot is deleted, and a copy turned off is taken off its slots for its spell's own macro.
--- Custom and equipment macros can stay on several slots: they have no per-button settings.
+-- A copy turned off (focus, enemy player, nearest or combat rank) is taken off its slots for its spell's own
+-- macro, and deleted with its variants. A macro on several slots stays shared until one button's menu changes
+-- it (see smb.editMacro), and a variant lasts until it is deleted or merged, even off the bars.
 local SCAN_RETRY = 0.5 -- seconds to wait while something is on the cursor, e.g. a button being dragged
 local LOGIN_DELAY = 2 -- seconds after entering the world, so the bars have loaded and Cleanup.lua has run
 
 local scanReady = false
 local scanPending = false
-local lastSlots = {} -- {[macro name] = {[slot] = true}} from the previous scan, to tell which slot is new
-local fullAt -- the macro count when a per-button copy found no free macro slot, so it isn't retried until it changes
-
-local function macroCount()
-    local account, character = GetNumMacros()
-    return account + character
-end
 
 -- Puts the spell's own macro back on the slots of the copies turned off since the last scan, and deletes them.
 local function replaceRemovedCopies()
@@ -134,59 +111,13 @@ local function replaceRemovedCopies()
         for _, slot in ipairs(smb.macroSlots()[entry.macroName] or {}) do
             if not (spellMacro and smb.placeMacro(spellMacro, slot)) then smb.clearSlot(slot) end
         end
-        if entry.copy.buttonCopy then
-            smb.deleteButtonCopy(entry.copy)
+        if entry.copy.variant then
+            smb.deleteVariant(entry.copy)
         else
             smb.deleteMacroNamed(entry.macroName)
         end
     end
     return #removed > 0
-end
-
--- Deletes this character's per-button copies that are on no slot.
-local function deleteUnplacedCopies(slots)
-    local changed = false
-    for _, macro in ipairs(smb.macros) do
-        if macro.buttonCopy and not slots[macro.macroName] then
-            smb.deleteButtonCopy(macro)
-            changed = true
-        end
-    end
-    return changed
-end
-
--- Gives each slot but one of a spell macro on several slots a per-button copy. The slot that held it at the
--- last scan keeps it, else the lowest.
-local function splitSharedButtons(slots)
-    local changed = false
-    for name, list in pairs(slots) do
-        local macro = smb.macroByMacroName[name]
-        if fullAt == macroCount() then break end
-        if macro and #list > 1 and not macro.custom and not macro.equipment then
-            local keep = list[1]
-            for _, slot in ipairs(list) do
-                if lastSlots[name] and lastSlots[name][slot] then
-                    keep = slot
-                    break
-                end
-            end
-            for _, slot in ipairs(list) do
-                if slot ~= keep and fullAt ~= macroCount() then
-                    local copy = smb.newButtonCopy(macro)
-                    if copy and smb.placeMacro(copy, slot) then
-                        changed = true
-                    else
-                        if copy then
-                            smb.deleteButtonCopy(copy)
-                            smb.collectMacros()
-                        end
-                        fullAt = macroCount() -- smb.pickupMacro said why
-                    end
-                end
-            end
-        end
-    end
-    return changed
 end
 
 local function scan()
@@ -196,22 +127,7 @@ local function scan()
         return
     end
     if #smb.macros == 0 then smb.collectMacros() end
-    local changed = replaceRemovedCopies()
-    if changed then smb.collectMacros() end
-    local slots, any = smb.macroSlots()
-    if not any then return end -- the bars haven't loaded
-    if deleteUnplacedCopies(slots) then
-        changed = true
-        smb.collectMacros()
-    end
-    if fullAt and fullAt ~= macroCount() then fullAt = nil end
-    changed = splitSharedButtons(slots) or changed
-    lastSlots = {}
-    for name, list in pairs(smb.macroSlots()) do
-        lastSlots[name] = {}
-        for _, slot in ipairs(list) do lastSlots[name][slot] = true end
-    end
-    if changed then smb.refreshPage() end
+    if replaceRemovedCopies() then smb.refreshPage() end
 end
 
 function scheduleScan()

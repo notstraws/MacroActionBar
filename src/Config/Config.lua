@@ -39,12 +39,17 @@ local _, smb = ...
 --   from the spell's: Before Casting, After Casting, Sequence (see Cast sequences below), and the rest, e.g.
 --   Mark of the Wild then Thorns on the nearest player while the spell's own macro casts just Mark of the Wild.
 --
---   Every action button gets its own macro: put a spell's macro (or one of its second macros) on a second
---   button and that button gets a numbered copy, e.g. "Fireball #2", that starts with the same options and is
---   then set up on its own (right-click it on the bar or on the page). Taking it off the bars deletes it.
+--   A spell's macro (or one of its second macros) can be on several action buttons: they share it, and a
+--   change on the page applies to all of them. A change from one button's right-click menu applies to that
+--   button alone: when other buttons hold the macro too, that button gets a numbered variant, e.g. "Fireball
+--   #2", with the change, and the others keep the macro as it was. "Duplicate Macro" (right-click) makes a
+--   variant too, to set up on its own. Variants are this character's and last until "Delete Macro" (which puts
+--   the macro it came from back on its buttons), or until a change makes one the same as another macro of the
+--   spell: then they merge, the spell's own macro (or the lower number) taking the other's buttons.
 --   Turning on a second macro from an action button's right-click menu puts it on that button; turning one
 --   off puts the spell's own macro back on its buttons. Right-clicking a plain spell placed from Blizzard's
---   spellbook opens its macro's menu too: the first change puts the macro on that button in the spell's place.
+--   spellbook opens its macro's menu too: the first change puts the macro (or, when it is on other buttons
+--   already or set up already, a variant) on that button in the spell's place.
 --
 -- cursor: ground-targeted spells that offer Cast On "Cursor" (right-click a macro): the spell lands where
 --   the cursor points, with no targeting circle to click.
