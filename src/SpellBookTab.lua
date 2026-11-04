@@ -52,21 +52,42 @@ local function menuOrder(sections, first)
 end
 
 -- Every spell macro has a menu; custom macros don't. A focus, enemy player, nearest or combat rank copy's menu has its own
--- options, apart from its spell's. Every menu ends with Reset To Default.
-local function showMacroMenu(button)
-    local macro = button.macro
+-- options, apart from its spell's. Every menu ends with Reset To Default. The menu opens at owner (a page
+-- button, or an action button holding the macro), and calls onChange after every change. Opened from an action
+-- button, actionSlot is its action slot: turning a copy on there puts the copy on that button. On a plain spell
+-- button, prepare is called before the first change and returns the macro the change applies to (having put
+-- it on the button), or nil to skip the change.
+local COPY_KEYS = {focus = true, enemyPlayer = true, nearest = true, combatRank1 = true}
+
+function smb.showMacroMenu(owner, macro, onChange, actionSlot, prepare)
     if not smb.hasOptions(macro) then return end
+    -- every change starts here; false skips it. The menu's getters read macro, so they follow the swap
+    local function beforeChange()
+        if not prepare then return true end
+        local target = prepare()
+        if not target then return false end
+        macro, prepare = target, nil
+        return true
+    end
     local function addOptions(rootDescription)
         -- an equipment macro's menu is titled by its one section instead
         if not macro.equipment then rootDescription:CreateTitle(macro.name) end
+        if prepare then rootDescription:CreateTitle("Modifying this spell will turn it into a macro and be placed in the Macro Spellbook") end
         local function addOption(label, key)
             return rootDescription:CreateCheckbox(label,
                 function() return smb.isOptionOn(macro, key) end,
                 function()
+                    if not beforeChange() then return end
                     smb.toggleOption(macro, key)
                     -- adds, removes or rewrites the focus copy, and rewrites the macros casting this spell
                     -- with a modifier key
-                    refresh(button:GetParent())
+                    onChange()
+                    local isCopy = macro.focus or macro.enemyPlayer or macro.nearest or macro.combatCopy
+                    if actionSlot and COPY_KEYS[key] and not isCopy and smb.isOptionOn(macro, key) then
+                        local copy = smb.copyOf(macro.name, key)
+                        -- the button now holds the copy, so this menu no longer describes it
+                        if copy and smb.placeMacro(copy, actionSlot) then return MenuResponse.Close end
+                    end
                 end)
         end
         -- the Sequence submenu: the spells cast after the macro's own, ticked in order: the ones
@@ -74,13 +95,14 @@ local function showMacroMenu(button)
         local function addSequenceMenu()
             if not smb.offersSequence(macro) then return end
             local function changed()
-                refresh(button:GetParent()) -- rewrites the macro, its focus copy and its subtext
+                onChange() -- rewrites the macro, its focus copy and its subtext
             end
             local picked = smb.sequenceSpells(macro)
             local submenu = rootDescription:CreateButton("Sequence: "
                 .. (#picked > 0 and (#picked + 1) .. " spells" or "None"))
             submenu:CreateTitle("Cast In Sequence (resets after 2 sec)")
             submenu:CreateButton("Clear", function()
+                if not beforeChange() then return end
                 smb.clearSequence(macro)
                 changed()
             end)
@@ -89,6 +111,7 @@ local function showMacroMenu(button)
                 submenu:CreateCheckbox(name .. (pos and " (" .. pos .. ")" or "") .. (suffix or ""),
                     function() return smb.sequencePosition(macro, name) ~= nil end,
                     function()
+                        if not beforeChange() then return end
                         smb.toggleSequenceSpell(macro, name)
                         changed()
                     end)
@@ -125,8 +148,9 @@ local function showMacroMenu(button)
                 submenu:CreateRadio(label,
                     function() return smb.followUpSpell(macro) == name end,
                     function()
+                        if not beforeChange() then return end
                         smb.setFollowUpSpell(macro, name)
-                        refresh(button:GetParent()) -- rewrites the macro, its focus copy and its subtext
+                        onChange() -- rewrites the macro, its focus copy and its subtext
                     end)
             end
             addPick("None", nil)
@@ -155,16 +179,19 @@ local function showMacroMenu(button)
             return
         end
         -- a copy has its own options (see settingKey in Macros.lua), led by the one that removes it, but
-        -- casts on its fixed target (a combat rank copy keeps its spell's targeting) and offers no copies of its own
+        -- casts on its fixed target (a combat rank copy keeps its spell's targeting) and offers no copies of its own.
+        -- A per-button copy has the options of the macro it came from, but none that add or remove a copy: those
+        -- are its spell's, and taking it off the bars removes it
         local isCopy = macro.focus or macro.enemyPlayer or macro.nearest or macro.combatCopy
+        local removable = not macro.buttonCopy
         if macro.focus then
-            addOption("Cast On Focus", "focus")
+            if removable then addOption("Cast On Focus", "focus") end
         elseif macro.enemyPlayer then
-            addOption("Cast On Enemy Player", "enemyPlayer")
+            if removable then addOption("Cast On Enemy Player", "enemyPlayer") end
         elseif macro.nearest then
-            addOption("Cast On Nearest Player", "nearest")
+            if removable then addOption("Cast On Nearest Player", "nearest") end
         elseif macro.combatCopy then
-            addOption("Rank 1 Out Of Combat", "combatRank1")
+            if removable then addOption("Rank 1 Out Of Combat", "combatRank1") end
             if macro.target then addOption("Cast On Mouseover", "mouseover") end
             if macro.cursor then addOption("Cast At Cursor", "cursor") end
         else
@@ -179,7 +206,7 @@ local function showMacroMenu(button)
         -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Nearest Player instead
         local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
         if macro.spam and not noToggle then addOption(spamLabels(macro)[1], "spam") end
-        if not isCopy then
+        if not isCopy and not macro.buttonCopy then
             if macro.target then addOption("Cast On Focus", "focus") end
             if macro.dispel then addOption("Cast On Enemy Player", "enemyPlayer") end
             if macro.buff then addOption("Cast On Nearest Player", "nearest") end
@@ -257,8 +284,9 @@ local function showMacroMenu(button)
                 -- a divider sets the Warrior stances apart from the lines around them
                 if i > 1 and line.stance ~= lines[i - 1].stance then submenu:CreateDivider() end
                 livePlaced(submenu:CreateCheckbox(placed(label, id), isOn, function()
+                    if not beforeChange() then return end
                     toggle()
-                    refresh(button:GetParent()) -- rewrites the focus copy too
+                    onChange() -- rewrites the focus copy too
                     return MenuResponse.Refresh -- renumbers the other labels
                 end), label, id)
             end
@@ -268,8 +296,9 @@ local function showMacroMenu(button)
                 livePlaced(submenu:CreateCheckbox(placed(label, slot),
                     function() return smb.isUsingSlot(macro, slot, side) ~= nil end,
                     function()
+                        if not beforeChange() then return end
                         smb.toggleUseSlot(macro, slot, side)
-                        refresh(button:GetParent()) -- rewrites the focus copy too
+                        onChange() -- rewrites the focus copy too
                         return MenuResponse.Refresh -- renumbers the other labels
                     end), label, slot)
             end
@@ -288,7 +317,7 @@ local function showMacroMenu(button)
         local sections = {}
         for _, other in ipairs(smb.macros) do
             local isSpell = smb.macroByName[other.name] == other
-            if not other.unlearned and ((isSpell and other.name ~= macro.name) or other.focus) then
+            if not other.unlearned and ((isSpell and other.name ~= macro.name) or (other.focus and not other.buttonCopy)) then
                 local section = sections[#sections]
                 if not section or section.name ~= other.category then
                     section = {name = other.category}
@@ -308,12 +337,14 @@ local function showMacroMenu(button)
                 return pickedName == name and pickedFocus == onFocus
             end
             local function pick(name, onFocus)
+                if not beforeChange() then return end
                 smb.setModifierSpell(macro, mod, name, onFocus)
-                refresh(button:GetParent()) -- rewrites the macro and its subtext
+                onChange() -- rewrites the macro and its subtext
             end
             local function pickSlot(slot)
+                if not beforeChange() then return end
                 smb.setModifierSlot(macro, mod, slot)
-                refresh(button:GetParent()) -- rewrites the macro and its subtext
+                onChange() -- rewrites the macro and its subtext
             end
             local current, currentFocus = smb.modifierSpell(macro, mod)
             local currentSlot = smb.modifierSlot(macro, mod)
@@ -367,8 +398,9 @@ local function showMacroMenu(button)
         rootDescription:CreateDivider()
         for _, form in ipairs(smb.formNames()) do
             local function pick(name)
+                if not beforeChange() then return end
                 smb.setFormSpell(macro, form, name)
-                refresh(button:GetParent()) -- rewrites the macro and its subtext
+                onChange() -- rewrites the macro and its subtext
             end
             local current = smb.formSpell(macro, form)
             local submenu = rootDescription:CreateButton(form .. ": " .. (current or "None"))
@@ -401,14 +433,15 @@ local function showMacroMenu(button)
             end
         end
     end
-    MenuUtil.CreateContextMenu(button, function(_, rootDescription)
+    MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
         addOptions(rootDescription)
         -- at the bottom of every menu, greyed out while nothing differs from the defaults
         if not smb.offersReset(macro) then return end
         rootDescription:CreateDivider()
         rootDescription:CreateButton("Reset To Default", function()
+            if not beforeChange() then return end
             smb.resetMacro(macro)
-            refresh(button:GetParent()) -- removes the focus and nearest copies, and rewrites the subtext
+            onChange() -- removes the focus and nearest copies, and rewrites the subtext
         end):SetEnabled(function() return smb.hasCustomSettings(macro) end)
     end)
 end
@@ -513,7 +546,7 @@ local function showTooltip(button)
     end
     GameTooltip:AddLine("Click or drag to place on an action bar.", 0.5, 0.5, 0.5, true)
     if smb.hasOptions(macro) then
-        GameTooltip:AddLine("Right-click for options.", 0.5, 0.5, 0.5, true)
+        GameTooltip:AddLine("Right-click for options, here or on your action bars.", 0.5, 0.5, 0.5, true)
     end
     local kind = smb.gameTooltipKind(macro)
     if macro.description then
@@ -594,7 +627,8 @@ local function createMacroButton(parent)
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:SetScript("OnClick", function(self, mouseButton)
         if mouseButton == "RightButton" then
-            showMacroMenu(self)
+            local page = self:GetParent()
+            smb.showMacroMenu(self, self.macro, function() refresh(page) end)
         else
             smb.pickupMacro(self.macro)
         end
@@ -640,6 +674,9 @@ function setMacro(button, macro, bars)
         button.subText:SetTextColor(unpack(INK_COLOR))
     elseif macro.equipment then
         button.subText:SetText(macro.slotLabel)
+        button.subText:SetTextColor(unpack(INK_COLOR))
+    elseif macro.buttonCopy then
+        button.subText:SetText("Button #" .. macro.buttonCopy)
         button.subText:SetTextColor(unpack(INK_COLOR))
     elseif macro.focus then
         button.subText:SetText("Focus")
@@ -845,7 +882,21 @@ function refresh(page)
     layout(page)
 end
 
+local builtPage -- the page, once LibSpellBookTabs has created it
+
+-- Rebuilds and updates the macros after a change made off the page (an action bar's menu), redrawing the
+-- page if it has been built.
+function smb.refreshPage()
+    if builtPage then
+        refresh(builtPage)
+    else
+        smb.collectMacros()
+        smb.syncAllMacros()
+    end
+end
+
 local function buildPage(page)
+    builtPage = page
     page.headers = framePool(function() return createHeader(page) end)
     page.buttons = framePool(function() return createMacroButton(page) end)
 
