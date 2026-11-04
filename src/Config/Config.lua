@@ -21,21 +21,20 @@ local _, smb = ...
 --   hostile / friendly mouseover target. A spell in both lists casts on either. Every harmful spell with a
 --   range (melee included) counts as a mouseoverEnemy spell without being listed, except cursor spells, so
 --   mouseoverEnemy only needs the ones the game doesn't flag. Other spells in neither list never offer
---   it. The same spells offer "Cast On Focus": the page then also lists a second macro for the spell,
---   right after it, that casts on your focus target (or your target when you have no hostile / friendly
---   focus).
+--   it. The same spells offer Cast On "Focus", cast on your focus target (or your target when you have no
+--   hostile / friendly focus).
 --
 -- dispels: spells that offer "Cast On Enemy Player" (right-click a macro): the page then also lists a second
---   macro for the spell, right after it (and its focus macro), that targets the nearest enemy player, casts
---   the spell on them, then switches back to your previous target, like the focus macro. With no enemy
+--   macro for the spell, right after it, that targets the nearest enemy player, casts
+--   the spell on them, then switches back to your previous target. With no enemy
 --   player near it casts nothing, so it never lands on an NPC you had targeted.
 --
 -- buffs: spells that offer "Cast On Nearest Player" (right-click a macro): the page then also lists a second
---   macro for the spell, right after it (and its focus and enemy player macros), that targets the nearest
+--   macro for the spell, right after it (and its enemy player macro), that targets the nearest
 --   friendly player, casts the spell on them (or on you when no friendly player is near), leaving them as
 --   your target. It never casts on an NPC.
 --
---   Each of these second macros (focus, enemy player, nearest) has its own right-click options, separate
+--   Each of these second macros (enemy player, nearest) has its own right-click options, separate
 --   from the spell's: Before Casting, After Casting, Sequence (see Cast sequences below), and the rest, e.g.
 --   Mark of the Wild then Thorns on the nearest player while the spell's own macro casts just Mark of the Wild.
 --
@@ -131,7 +130,7 @@ local _, smb = ...
 --   for /cancelaura Ice Block, so the spell isn't blocked while Ice Block is on. Every mouseoverEnemy spell
 --   (damaging spells) also offers, in the Before Casting menu only, "Clear Dead Target" for /cleartarget [dead],
 --   dropping a dead target, and "Target Nearest Enemy" for /targetenemy [noharm][dead], targeting the nearest
---   enemy when you have no live hostile target. Its focus and enemy player macros offer neither. The settings
+--   enemy when you have no live hostile target. Its enemy player macro offers neither. The settings
 --   dropdown's Global Macro Settings turn either line on for every such spell at once; ticking it in a macro's
 --   menu overrides that for the macro.
 --
@@ -149,14 +148,12 @@ local _, smb = ...
 -- Modifier keys aren't set here either: right-click a spell macro for its "Shift", "Ctrl" and "Alt" menus,
 --   where you pick another learned spell, by section, that the macro casts while that key is held. With
 --   several keys held, Shift wins over Ctrl and Ctrl over Alt. The picked spell is cast the way its own
---   macro targets: set Cast On to "Mouseover" (or "Cursor") for that spell's macro and every macro
---   using it with a modifier follows. A spell with "Cast On Focus" on is also listed as "<spell> (Focus)",
---   the macro's own spell included: it casts on your focus target (or your target when you have none),
---   and turning that spell's focus macro off clears the pick. The "Equipment" submenu instead picks an
+--   macro targets: set Cast On to "Mouseover" (or "Focus", or "Cursor") for that spell's macro and every
+--   macro using it with a modifier follows. The "Equipment" submenu instead picks an
 --   equipped item with a "Use:" effect (greyed out while you wear none): the macro uses whatever is in that
 --   slot, so it keeps working after you swap the item.
 --   Alt is the game's self-cast key by default, so a helpful Alt spell with no mouseover target may land on
---   you. Focus copies don't use modifiers. A macro can be at most 255 characters: one that grows past it
+--   you. Enemy player and nearest macros don't use modifiers. A macro can be at most 255 characters: one that grows past it
 --   says so in its tooltip and can't be placed until you turn something off.
 --
 -- Cast sequences: right-click a spell macro in a section with sequence = true (but not a cooldowns spell) for
