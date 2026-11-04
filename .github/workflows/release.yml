@@ -88,6 +88,17 @@ jobs:
           ref: ${{ needs.tag.outputs.tag || github.ref }}
           fetch-depth: 0 # packager needs history for changelog generation
 
+      # A tag with hand-written notes (patch-notes/<tag>.md) uploads them as its changelog. Other
+      # tags (the automatic betas) keep the packager's changelog generated from commits.
+      - name: Use the tag's patch notes as the changelog
+        env:
+          TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+        run: |
+          if [ -f "patch-notes/$TAG.md" ]; then
+            printf 'manual-changelog:\n  filename: patch-notes/%s.md\n  markup-type: markdown\n' "$TAG" >> .pkgmeta
+            echo "Using patch-notes/$TAG.md"
+          fi
+
       # Runs the packager script directly instead of BigWigsMods/packager@v2. On a push to a
       # branch, the packager skips any commit that already has a tag ("Found future tag"),
       # expecting a separate tag-push run to upload it. Our beta tag is created in this run and
