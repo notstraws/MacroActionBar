@@ -56,11 +56,9 @@ local _, smb = ...
 -- raidRank1: spells that offer "Downrank In Raids" (right-click a macro): the macro casts the spell's rank 1
 --   while you are in a raid group and its highest rank otherwise.
 --
--- combatRank1: spells that offer "Rank 1 Out Of Combat" (right-click a macro): the page then also lists a second
---   macro for the spell, right after it (and its other second macros), that casts the spell's rank 1 while you
---   are out of combat and its highest rank in combat, e.g. a cheap Arcane Explosion to pull a group. Like the
---   other second macros it has its own right-click options, and it offers Cast On "Mouseover" and "Cursor"
---   like the spell's own macro. It has no Sequence, "Downrank In Raids" or modifier keys.
+-- combatRank1: spells that offer "Rank 1 Out Of Combat" (right-click a macro): the macro casts the
+--   spell's rank 1 while you are out of combat and its highest rank in combat, e.g. a cheap Arcane Explosion
+--   to pull a group.
 --
 -- channeled: channelled spells that offer "Don't Recast While Channeling" (right-click a macro): the cast
 --   gets a [nochanneling:<spell>] condition, so pressing the macro again while the spell is channelling does
@@ -160,7 +158,7 @@ local _, smb = ...
 --   its "Sequence" menu, where you tick other learned spells from sequence = true sections in the order the
 --   macro should cast them after its own spell: each press casts the next one (/castsequence). The sequence starts over from its first spell
 --   after 2 seconds without a press. Every step is cast the way the macro's own spell is, e.g. on the
---   mouseover target with Cast On set to "Mouseover". "Downrank In Raids" is off while a sequence is set, and a
+--   mouseover target with Cast On set to "Mouseover". "Downrank In Raids" and "Rank 1 Out Of Combat" are off while a sequence is set, and a
 --   macro that casts its pet's ability has no sequence.
 --
 -- extraSpells: spell IDs to list with "Show Unlearned" on until learned, for spells that neither the

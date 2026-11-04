@@ -51,16 +51,17 @@ local function menuOrder(sections, first)
     return ordered
 end
 
--- Every spell macro has a menu; custom macros don't. An enemy player, nearest or combat rank copy's menu has its own
+-- Every spell macro has a menu; custom macros don't. An enemy player or nearest copy's menu has its own
 -- options, apart from its spell's. Every spell macro's menu on the page ends with Duplicate Macro (a variant's
 -- also with Delete Macro), and every menu but a variant's with Reset To Default. The menu opens at owner (a page button, or an action
 -- button holding the macro), and calls onChange after every change. Opened from an action button, actionSlot
 -- is its action slot: a change there applies to that button alone (see smb.editMacro), and turning a copy on
 -- there puts the copy on that button. plainSpell is true when that button holds the plain spell (placed from
 -- Blizzard's spellbook) whose macro this is.
-local COPY_KEYS = {enemyPlayer = true, nearest = true, combatRank1 = true}
+local COPY_KEYS = {enemyPlayer = true, nearest = true}
 
--- The Rank submenu's choices, in order: smb.rank's values (none for Normal) and their labels.
+-- The Rank submenu's choices, in order: smb.rank's values (none for Normal) and their labels. Rank 1 Out Of
+-- Combat ("combat") is a checkbox of its own instead.
 local RANKS = {{label = "Normal"}, {rank = "raid", label = "Downrank In Raids"}}
 
 function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
@@ -88,7 +89,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                     -- adds, removes or rewrites the copy, and rewrites the macros casting this spell with a
                     -- modifier key
                     onChange()
-                    local isCopy = macro.enemyPlayer or macro.nearest or macro.combatCopy
+                    local isCopy = macro.enemyPlayer or macro.nearest
                     if actionSlot and COPY_KEYS[key] and not isCopy and smb.isOptionOn(macro, key) then
                         local copy = smb.copyOf(macro.name, key)
                         -- the button now holds the copy, so this menu no longer describes it
@@ -130,10 +131,10 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                 .. (#picked > 0 and (#picked + 1) .. " spells" or "None"))
             -- greyed out when it lists no spell to tick (set by the loops below, before the menu shows)
             local hasPicks = false
-            -- a sequence can't downrank (see castBody in Macros.lua), so it is also greyed out while Downrank
-            -- In Raids is on. Either way it stays enabled while one is set, so it can be cleared.
+            -- a sequence can't downrank (see castBody in Macros.lua), so it is also greyed out while a rank
+            -- other than Normal is on. Either way it stays enabled while one is set, so it can be cleared.
             submenu:SetEnabled(function()
-                return smb.hasSequenceOn(macro) or (hasPicks and smb.rank(macro) ~= "raid")
+                return smb.hasSequenceOn(macro) or (hasPicks and smb.rank(macro) == nil)
             end)
             submenu:CreateTitle("Cast In Sequence (resets after 2 sec)")
             submenu:CreateButton("Clear", function()
@@ -212,18 +213,15 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             return
         end
         -- a copy has its own options (see settingKey in Macros.lua), led by the one that removes it, but
-        -- casts on its fixed target (a combat rank copy keeps its spell's targeting) and offers no copies of its own.
+        -- casts on its fixed target and offers no copies of its own.
         -- A variant has the options of the macro it came from, but none that add or remove a copy: those are its
         -- spell's
-        local isCopy = macro.enemyPlayer or macro.nearest or macro.combatCopy
+        local isCopy = macro.enemyPlayer or macro.nearest
         local removable = not macro.variant
         if macro.enemyPlayer then
             if removable then addOption("Cast On Enemy Player", "enemyPlayer") end
         elseif macro.nearest then
             if removable then addOption("Cast On Nearest Player", "nearest") end
-        elseif macro.combatCopy then
-            if removable then addOption("Rank 1 Out Of Combat", "combatRank1") end
-            addCastOn()
         else
             addCastOn()
             if macro.petAbility then addOption("Cast " .. macro.petAbility .. " If Summoned", "pet") end
@@ -245,11 +243,22 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                             onChange() -- rewrites the macro and its subtext
                         end)
                     -- a sequence can't downrank (see castBody in Macros.lua)
-                    if choice.rank == "raid" then
+                    if choice.rank ~= nil then
                         radio:SetEnabled(function() return not smb.hasSequenceOn(macro) end)
                     end
                 end
             end
+        end
+        -- Rank 1 Out Of Combat, for the class config's combatRank1 spells: the "combat" rank, ticked, or Normal.
+        -- Greyed out while a sequence is on, which can't downrank (see castBody in Macros.lua)
+        if smb.offersRank(macro, "combat") then
+            rootDescription:CreateCheckbox("Rank 1 Out Of Combat",
+                function() return smb.rank(macro) == "combat" end,
+                function()
+                    local rank = smb.rank(macro) ~= "combat" and "combat" or nil
+                    if not change(function(m) smb.setRank(m, rank) end) then return end
+                    onChange() -- rewrites the macro and its subtext
+                end):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
         end
         -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Nearest Player instead
         local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
@@ -257,7 +266,6 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
         if not isCopy and not macro.variant then
             if macro.dispel then addOption("Cast On Enemy Player", "enemyPlayer") end
             if macro.buff then addOption("Cast On Nearest Player", "nearest") end
-            if macro.combatRank1 then addOption("Rank 1 Out Of Combat", "combatRank1") end
         end
         if noToggle then addOption(spamLabels(macro)[1], "spam") end
         -- one submenu per side of the cast: /cast !Auto Shot, /startattack, /stopattack, /petattack, /petfollow, the offGcd spells, the race's racials and the equipped
@@ -725,9 +733,6 @@ function setMacro(button, macro, bars)
     elseif macro.nearest then
         button.subText:SetText("Nearest")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif macro.combatCopy then
-        button.subText:SetText("OOC R1")
-        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "pet") then
         button.subText:SetText("Pet")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
@@ -766,6 +771,9 @@ function setMacro(button, macro, bars)
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.rank(macro) == "raid" then
         button.subText:SetText("Raid R1")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif smb.rank(macro) == "combat" then
+        button.subText:SetText("OOC R1")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "spam") then
         button.subText:SetText(spamLabels(macro)[2])

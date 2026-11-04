@@ -94,7 +94,7 @@ local function scheduleUpdate()
     end)
 end
 
--- A copy turned off (enemy player, nearest or combat rank) is taken off its slots for its spell's own
+-- A copy turned off (enemy player or nearest) is taken off its slots for its spell's own
 -- macro, and deleted with its variants. A macro on several slots stays shared until one button's menu changes
 -- it (see smb.editMacro), and a variant lasts until it is deleted or merged, even off the bars. Slots left
 -- holding a deleted macro (any macro, deleted anywhere) are emptied.
