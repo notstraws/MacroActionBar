@@ -29,23 +29,22 @@ local _, smb = ...
 --   the spell on them, then switches back to your previous target. With no enemy
 --   player near it casts nothing, so it never lands on an NPC you had targeted.
 --
--- buffs: spells that offer "Cast On Nearest Player" (right-click a macro): the page then also lists a second
---   macro for the spell, right after it (and its enemy player macro), that targets the nearest
---   friendly player, casts the spell on them (or on you when no friendly player is near), leaving them as
---   your target. It never casts on an NPC.
+--   The enemy player macro has its own right-click options, separate from the spell's: Before Casting,
+--   After Casting, Sequence (see Cast sequences below), and the rest.
 --
---   Each of these second macros (enemy player, nearest) has its own right-click options, separate
---   from the spell's: Before Casting, After Casting, Sequence (see Cast sequences below), and the rest, e.g.
---   Mark of the Wild then Thorns on the nearest player while the spell's own macro casts just Mark of the Wild.
+-- buffs: spells that offer Cast On "Nearest Player" (right-click a macro): the spell's macro targets the
+--   nearest friendly player and casts the spell on them (or on you when no friendly player is near), leaving
+--   them as your target. It never casts on an NPC. A macro that casts a Nearest Player spell with a modifier
+--   key, in a form or as a follow-up casts it on your target instead.
 --
---   A spell's macro (or one of its second macros) can be on several action buttons: they share it, and a
+--   A spell's macro (or its enemy player macro) can be on several action buttons: they share it, and a
 --   change on the page applies to all of them. A change from one button's right-click menu applies to that
 --   button alone: when other buttons hold the macro too, that button gets a numbered variant, e.g. "Fireball
 --   #2", with the change, and the others keep the macro as it was. "Duplicate Macro" (right-click on the page) makes a
 --   variant too, to set up on its own. Variants are this character's and last until "Delete Macro" (which takes it
 --   off its buttons too), or until a change makes one the same as another macro of the
 --   spell: then they merge, the spell's own macro (or the lower number) taking the other's buttons.
---   Turning on a second macro from an action button's right-click menu puts it on that button; turning one
+--   Turning on an enemy player macro from an action button's right-click menu puts it on that button; turning one
 --   off puts the spell's own macro back on its buttons. Right-clicking a plain spell placed from Blizzard's
 --   spellbook opens its macro's menu too: the first change puts the macro (or, when it is on other buttons
 --   already or set up already, a variant) on that button in the spell's place.
@@ -151,7 +150,7 @@ local _, smb = ...
 --   equipped item with a "Use:" effect (greyed out while you wear none): the macro uses whatever is in that
 --   slot, so it keeps working after you swap the item.
 --   Alt is the game's self-cast key by default, so a helpful Alt spell with no mouseover target may land on
---   you. Enemy player and nearest macros don't use modifiers. A macro can be at most 255 characters: one that grows past it
+--   you. Enemy player macros don't use modifiers. A macro can be at most 255 characters: one that grows past it
 --   says so in its tooltip and can't be placed until you turn something off.
 --
 -- Cast sequences: right-click a spell macro in a section with sequence = true (but not a cooldowns spell) for

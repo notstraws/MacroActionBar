@@ -7,8 +7,7 @@ local ICON_QUESTION_MARK = 134400 -- Interface\Icons\INV_Misc_QuestionMark
 
 local MAX_MACRO_NAME = 16 -- longer names are truncated by CreateMacro, so GetMacroIndexByName would miss them
 local MAX_MACRO_BODY = 255
-local NEAREST_SUFFIX = " @N" -- ends a nearest copy's WoW macro name, keeping it apart from the spell's own
-local ENEMY_SUFFIX = " @E" -- ends an enemy player copy's WoW macro name, likewise
+local ENEMY_SUFFIX = " @E" -- ends an enemy player copy's WoW macro name, keeping it apart from the spell's own
 
 -- MAX_CHARACTER_MACROS and MAX_ACCOUNT_MACROS come from the load-on-demand Blizzard_MacroUI, so they
 -- are nil until the macro window has been opened once.
@@ -21,11 +20,10 @@ local function maxAccountMacros()
 end
 
 -- Per-account sets of spell names, keyed by setting: "castOn" (where the macro casts, see smb.castOn:
--- "mouseover", on the mouseover unit first, "focus", on the focus target first, or "cursor", a ground-targeted
--- spell where the cursor points; it replaced the old "mouseover" and "cursor" sets and the old "focus" copies,
--- see migrate), "enemyPlayer" (the page also lists a
--- copy of a dispels spell's macro that casts on the nearest enemy player), "nearest" (the page also lists
--- a copy of a buffs spell's macro that casts on the nearest friendly player), "pet" (a summon macro casts the
+-- "mouseover", on the mouseover unit first, "focus", on the focus target first, "cursor", a ground-targeted
+-- spell where the cursor points, or "nearest", a buffs spell on the nearest friendly player; it replaced the old
+-- "mouseover" and "cursor" sets and the old "focus" and "nearest" copies, see migrate), "enemyPlayer" (the page
+-- also lists a copy of a dispels spell's macro that casts on the nearest enemy player), "pet" (a summon macro casts the
 -- pet's ability while that pet is out), "spam"
 -- (the macro does nothing while its channelled spell is channelling, its stealth spell is on, or you are in
 -- its shapeshift form, and casts a toggle spell as "!<spell>" so it doesn't toggle off), "petAttack" (the macro also sends
@@ -54,7 +52,7 @@ end
 -- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "followUp"
 -- holds a cooldown spell's one spell name: the macro casts it on the same press, after its own. "forms"
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
--- the class config's forms (see smb.formSpell). An enemy player or nearest copy stores its
+-- the class config's forms (see smb.formSpell). An enemy player copy stores its
 -- own settings under its spell's name plus the copy's suffix, e.g. "Dispel Magic @E" (see settingKey), and a
 -- variant under the key of the macro it came from plus " #<n>", e.g. "Fireball #2" (see variants).
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
@@ -217,10 +215,10 @@ end
 
 -- The options that add a copy of a spell macro. A copy stores them under its spell's name, like the spell's
 -- own macro, so unticking one in the copy's menu removes the copy.
-local COPY_OPTIONS = { enemyPlayer = true, nearest = true }
+local COPY_OPTIONS = { enemyPlayer = true }
 
 -- The key a spell macro stores a setting (key, optional) under: its spell's name, or, for an enemy player
--- or nearest copy, the name with the copy's suffix, so each copy has its own options apart
+-- copy, the name with the copy's suffix, so the copy has its own options apart
 -- from its spell's macro. A variant (see smb.newVariant) adds " #<n>" to the key of the macro it came from,
 -- e.g. "Fireball #2" or "Dispel Magic @E #2". COPY_OPTIONS are always stored under the spell's name.
 local function settingKey(macro, key)
@@ -228,8 +226,6 @@ local function settingKey(macro, key)
     local base = macro.name
     if macro.enemyPlayer then
         base = macro.name .. ENEMY_SUFFIX
-    elseif macro.nearest then
-        base = macro.name .. NEAREST_SUFFIX
     end
     if macro.variant then return base .. " #" .. macro.variant end
     return base
@@ -390,7 +386,7 @@ function smb.classOffersAutoShot()
     return autoShot ~= nil and not autoShot.unlearned
 end
 
--- Whether a macro offers an option ("enemyPlayer", "nearest", "pet", "spam",
+-- Whether a macro offers an option ("enemyPlayer", "pet", "spam",
 -- "petAttack", "stopCast" or "startAttack", or an equipment macro's "equipStopAttack" or "equipStopCast") and
 -- the player turned it on.
 function smb.isOptionOn(macro, key)
@@ -412,9 +408,7 @@ function smb.isOptionOn(macro, key)
         return on
     end
     local offered
-    if key == "nearest" then
-        offered = macro.buff
-    elseif key == "enemyPlayer" then
+    if key == "enemyPlayer" then
         offered = macro.dispel
     elseif key == "pet" then
         offered = macro.petAbility ~= nil
@@ -424,16 +418,33 @@ function smb.isOptionOn(macro, key)
     return offered and settings(key)[settingKey(macro, key)] == true or false
 end
 
+local removedCopies = {} -- the WoW macro names of copies turned off since smb.takeRemovedCopies
+
 -- The saved settings' format: 2 stores where a macro casts as one "castOn" setting instead of the old
--- "mouseover" and "cursor" flags; 3 casts on the focus target as a "castOn" mode instead of a focus copy.
-local SCHEMA = 3
+-- "mouseover" and "cursor" flags; 3 casts on the focus target as a "castOn" mode instead of a focus copy; 4
+-- casts on the nearest friendly player as a "castOn" mode instead of a nearest copy.
+local SCHEMA = 4
+
+-- The settings keys of the old copies migrate drops: focus copies ("<spell> @F") and nearest copies
+-- ("<spell> @N"), with their variants ("<spell> @N #2").
+local OLD_COPY_SUFFIXES = {" @F", " @N"}
+
+local function isOldCopyKey(key)
+    if type(key) ~= "string" then return false end
+    for _, suffix in ipairs(OLD_COPY_SUFFIXES) do
+        if key:find(suffix, 1, true) then return true end
+    end
+    return false
+end
 
 -- Brings the account's saved settings up to SCHEMA, once. From 1, every "mouseover" spell casts on the
 -- mouseover, then every "cursor" spell at the cursor, so a spell that had both keeps casting at the cursor, as
 -- castBody did; the old sets stay in the saved variables but are no longer read. From 2, the focus copies go:
 -- the "focus" set and the copies' own settings (stored under "<spell> @F") are dropped, and so are the
 -- modifier picks' focus flags, so a pick casts like its spell's own macro. The spell's own macro keeps casting
--- where it did.
+-- where it did. From 3, the nearest copies go the same way: a spell that had one casts on the nearest player
+-- itself, unless it already cast somewhere other than its target, and the copies' own settings (stored under
+-- "<spell> @N") are dropped. Their WoW macros are removed per character (see smb.noteOldNearestCopies).
 local function migrate()
     MacroSpellbookDB = MacroSpellbookDB or {}
     local schema = MacroSpellbookDB.schema or 1
@@ -446,12 +457,19 @@ local function migrate()
             end
         end
     end
+    if schema < 4 then
+        local castOn = settings("castOn")
+        for spell, on in pairs(MacroSpellbookDB.nearest or {}) do
+            if on == true and castOn[spell] == nil then castOn[spell] = "nearest" end
+        end
+    end
     MacroSpellbookDB.focus = nil
+    MacroSpellbookDB.nearest = nil
     -- generalMacros is keyed by WoW macro name, and keeps the copies' so login still clears them out
     for name, set in pairs(MacroSpellbookDB) do
         if type(set) == "table" and name ~= "generalMacros" then
             for key in pairs(set) do
-                if type(key) == "string" and key:find(" @F", 1, true) then set[key] = nil end
+                if isOldCopyKey(key) then set[key] = nil end
             end
         end
     end
@@ -468,18 +486,19 @@ local function castOnSettings()
 end
 
 -- Whether a macro offers a "castOn" mode: nil (Target, the plain cast) always, "mouseover" and "focus" when
--- its spell has a mouseover conditional (macro.target) and "cursor" for a ground-targeted spell
--- (macro.cursor). An enemy player or nearest copy casts on its own target, so it offers none, nor do custom
--- and equipment macros.
+-- its spell has a mouseover conditional (macro.target), "cursor" for a ground-targeted spell (macro.cursor)
+-- and "nearest" for a buffs spell (macro.buff). An enemy player copy casts on its own target, so it offers
+-- none, nor do custom and equipment macros.
 function smb.offersCastOn(macro, mode)
     if mode == nil then return true end
-    if macro.custom or macro.equipment or macro.enemyPlayer or macro.nearest then return false end
+    if macro.custom or macro.equipment or macro.enemyPlayer then return false end
     if mode == "mouseover" or mode == "focus" then return macro.target ~= nil end
     if mode == "cursor" then return macro.cursor == true end
+    if mode == "nearest" then return macro.buff == true end
     return false
 end
 
--- Where a macro casts: nil (on the target), "mouseover", "focus" or "cursor". A summon macro casting its pet's ability
+-- Where a macro casts: nil (on the target), "mouseover", "focus", "cursor" or "nearest". A summon macro casting its pet's ability
 -- (the "pet" option) casts on neither, so it is nil while that is on, keeping the setting. A copy has its own
 -- (see settingKey).
 function smb.castOn(macro)
@@ -498,8 +517,6 @@ local RANK_OFFERED = {
 
 -- The conditional each rank but Normal casts rank 1 under (see castBody).
 local RANK_CONDITION = {raid = "group:raid", combat = "nocombat"}
-
-local removedCopies = {} -- the WoW macro names of copies turned off since smb.takeRemovedCopies
 
 -- The "rank" settings, once the old flags are moved into them, once per account: a "raidRank1" flag becomes
 -- rank "raid", and a "combatRank1" flag, which added a copy ("<spell> R1"), rank "combat", the copy going the
@@ -756,9 +773,9 @@ end
 -- several keys held, the first wins.
 smb.MODIFIERS = {"shift", "ctrl", "alt"}
 
--- Whether a page macro is an enemy player or nearest copy of a spell macro.
+-- Whether a page macro is an enemy player copy of a spell macro.
 local function isCopy(macro)
-    return macro.enemyPlayer == true or macro.nearest == true
+    return macro.enemyPlayer == true
 end
 
 -- Every spell macro but a copy offers a spell for each modifier key.
@@ -859,8 +876,8 @@ local SEQUENCE_RESET = "reset=2 "
 
 -- A spell macro in a sequence section offers a cast sequence, unless it is a cooldown spell (see Config.lua),
 -- which offers a follow-up instead (see smb.offersFollowUp), or casts its pet's ability: a summon can't be
--- sequenced. A copy has its own sequence (see settingKey), so e.g. buffing the nearest player can cast
--- different spells from the spell's own macro.
+-- sequenced. A copy has its own sequence (see settingKey), so e.g. dispelling the nearest enemy player can
+-- cast different spells from the spell's own macro.
 function smb.offersSequence(macro)
     return macro.sequence and not macro.cooldown and smb.offersUseItems(macro) and not smb.isOptionOn(macro, "pet")
 end
@@ -985,7 +1002,8 @@ smb.macroByName = {}
 smb.macroByMacroName = {}
 
 -- A clause casting another page macro's spell under a condition (e.g. "mod:shift"), followed by "; ", the
--- way that spell's own page macro targets: at the mouseover, the focus or the cursor when that option is on there. With
+-- way that spell's own page macro targets: at the mouseover, the focus or the cursor when that option is on there. A
+-- spell cast on the nearest player is cast on the target: targeting the nearest player takes lines of its own. With
 -- noToggle, a toggle spell, such as an aspect, is always cast as "!<spell>", whatever its own page macro's
 -- spam option. With no condition (nil), the clause has none of its own, e.g. "[@cursor] Blizzard; ", or
 -- "Fireball; " for a plain cast.
@@ -1033,7 +1051,7 @@ end
 -- /script TargetLastTarget(): the function is protected, so a /script call is blocked as tainted.
 local LAST_TARGET_FOOTER = "\n/targetlasttarget"
 
--- A nearest copy first targets the nearest friendly player. Clearing the target first keeps the cast off an NPC (or any unit already targeted) when no friendly
+-- A macro cast on the nearest player first targets the nearest friendly player. Clearing the target first keeps the cast off an NPC (or any unit already targeted) when no friendly
 -- player is near: with no target, the cast falls back to you.
 local NEAREST_LINE = "/cleartarget\n/targetfriendplayer\n"
 
@@ -1301,7 +1319,7 @@ local function castBody(macro)
     -- rank otherwise. A sequence can't downrank: a rank 1 clause per target would repeat every step
     if rank ~= nil and not steps then
         local targets = {""}
-        if macro.nearest then
+        if castOn == "nearest" then
             targets = {"help,nodead", "@player"}
         elseif macro.enemyPlayer then
             targets = {"harm,nodead"}
@@ -1310,11 +1328,12 @@ local function castBody(macro)
         elseif castOn == "mouseover" or castOn == "focus" then
             targets = {"@" .. castOn .. "," .. macro.target .. ",nodead", ""}
         end
-        return header .. (macro.nearest and NEAREST_LINE or "") .. (macro.enemyPlayer and ENEMY_LINE or "")
+        return header .. (castOn == "nearest" and NEAREST_LINE or "") .. (macro.enemyPlayer and ENEMY_LINE or "")
             .. rank1Cast(name, targets, spam, mods, RANK_CONDITION[rank]) .. (macro.enemyPlayer and LAST_TARGET_FOOTER or "")
     end
-    -- a nearest copy casts on the player it just targeted, or on you when no friendly player is near
-    if macro.nearest then
+    -- a macro cast on the nearest player casts on the player it just targeted, or on you when no friendly
+    -- player is near
+    if castOn == "nearest" then
         return header .. NEAREST_LINE .. cast(cond(spam, "help,nodead") .. cond(spam, "@player"))
     end
     -- an enemy player copy casts on the enemy player it just targeted, then switches back
@@ -1414,8 +1433,6 @@ local function copySuffix(macro)
     local suffix = ""
     if macro.enemyPlayer then
         suffix = ENEMY_SUFFIX
-    elseif macro.nearest then
-        suffix = NEAREST_SUFFIX
     end
     if macro.variant then suffix = suffix .. " #" .. macro.variant end
     return suffix
@@ -1444,19 +1461,6 @@ local function makeEnemyPlayerMacro(macro)
     local copy = {}
     for key, value in pairs(macro) do copy[key] = value end
     copy.enemyPlayer = true
-    copy.cursor = false
-    copy.petAbility = nil
-    copy.macroName = spellMacroName(copy)
-    return copy
-end
-
--- A copy of a buffs spell macro that targets the nearest friendly player, casts on them (or on you when no
--- friendly player is near), leaving them targeted. Like an enemy player copy, it has its own options; unticking nearest
--- removes it.
-local function makeNearestMacro(macro)
-    local copy = {}
-    for key, value in pairs(macro) do copy[key] = value end
-    copy.nearest = true
     copy.cursor = false
     copy.petAbility = nil
     copy.macroName = spellMacroName(copy)
@@ -1687,16 +1691,10 @@ local function forEachUnlearnedSpell(fn, learned)
     end
 end
 
--- A page macro's place among its spell's entries: the spell, then its enemy player copy, then its nearest copy,
--- each followed by its variants in number order.
+-- A page macro's place among its spell's entries: the spell, then its enemy player copy, each followed by its
+-- variants in number order.
 local function copyRank(macro)
-    local rank = 0
-    if macro.nearest then
-        rank = 2
-    elseif macro.enemyPlayer then
-        rank = 1
-    end
-    return rank * 1000 + (macro.variant or 0)
+    return (macro.enemyPlayer and 1000 or 0) + (macro.variant or 0)
 end
 
 -- A spell macro's name ending in a number instead of its last characters (before its copy's suffix), for a
@@ -1752,7 +1750,6 @@ function smb.collectMacros()
         local macro = makeMacro(name, icon, unlearned, id)
         local group = {macro}
         if smb.isOptionOn(macro, "enemyPlayer") then group[#group + 1] = makeEnemyPlayerMacro(macro) end
-        if smb.isOptionOn(macro, "nearest") then group[#group + 1] = makeNearestMacro(macro) end
         local mine = variants()
         for i = 1, #group do
             local numbers = {}
@@ -1786,7 +1783,7 @@ function smb.collectMacros()
         forEachUnlearnedSpell(function(name, icon, id) add(name, icon, true, id) end, seen)
     end
     -- by section; within one, first = true custom macros, then spells, then other custom macros, then config
-    -- order, then by name, each spell's enemy player and nearest copies right after it
+    -- order, then by name, each spell's enemy player copy right after it
     table.sort(smb.macros, function(a, b)
         if a.categoryRank ~= b.categoryRank then return a.categoryRank < b.categoryRank end
         if (not a.first) ~= (not b.first) then return a.first == true end
@@ -2049,9 +2046,9 @@ function smb.isOnActionBars(macro, bars)
     return smb.countsSpellsOnBars() or macro.body == bareBody(macro.name)
 end
 
--- Flips a setting ("enemyPlayer", "nearest", "pet", "spam", "petAttack",
+-- Flips a setting ("enemyPlayer", "pet", "spam", "petAttack",
 -- "stopCast" or "startAttack", or "equipStopAttack" or "equipStopCast" on an equipment macro) and rewrites
--- the macro if it already exists. In combat the rewrite waits until the next pickup. The enemyPlayer and nearest settings add or remove a page entry, so the page must be rebuilt after any of them.
+-- the macro if it already exists. In combat the rewrite waits until the next pickup. The enemyPlayer setting adds or removes a page entry, so the page must be rebuilt after it.
 -- Stores a defaulted setting only where it differs from the default, so the rest follow a change of default.
 local function setDefaulted(macro, key, on)
     if on == optionDefault(key) then
@@ -2071,7 +2068,7 @@ end
 -- and its variants, so the action bars can put the spell's own macro back (see ActionBars.lua).
 local function noteRemovedCopy(macro, key)
     for _, other in ipairs(smb.macros) do
-        local matches = other.name == macro.name and (key == "enemyPlayer" and other.enemyPlayer or key == "nearest" and other.nearest)
+        local matches = other.name == macro.name and key == "enemyPlayer" and other.enemyPlayer
         if matches then removedCopies[#removedCopies + 1] = {macroName = other.macroName, spell = macro.name, copy = other} end
     end
 end
@@ -2093,7 +2090,7 @@ function smb.toggleOption(macro, key)
     rewrite(macro)
 end
 
--- Sets where a macro casts (nil for Target, "mouseover", "focus" or "cursor", see smb.offersCastOn), then rewrites
+-- Sets where a macro casts (nil for Target, "mouseover", "focus", "cursor" or "nearest", see smb.offersCastOn), then rewrites
 -- it like smb.toggleOption. It changes the macros that cast this spell with a modifier key or as a follow-up
 -- too, so the page must be rebuilt after.
 function smb.setCastOn(macro, mode)
@@ -2214,7 +2211,7 @@ end
 
 -- The settings a spell macro stores under its settingKey, and an equipment macro under its slot.
 local SPELL_SETTINGS = {
-    "castOn", "enemyPlayer", "nearest", "pet", "rank", "spam",
+    "castOn", "enemyPlayer", "pet", "rank", "spam",
     "petAttack", "stopCast", "startAttack", "startAttackBefore", "petAttackAfter", "autoShotBefore",
     "autoShotAfter", "petFollowBefore", "petFollowAfter",
     "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "clearDeadBefore", "targetEnemyBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
@@ -2253,8 +2250,8 @@ function smb.hasCustomSettings(macro)
 end
 
 -- Clears every setting of a macro, so it follows the defaults again, then rewrites it like smb.toggleOption.
--- Resetting a spell's macro turns enemyPlayer and nearest off, removing the copies along
--- with their own settings, so the page must be rebuilt after.
+-- Resetting a spell's macro turns enemyPlayer off, removing the copy along
+-- with its own settings, so the page must be rebuilt after.
 function smb.resetMacro(macro)
     if not smb.offersReset(macro) then return end
     local noCopies = macro.equipment or isCopy(macro) or macro.variant -- has no copies of its own to remove
@@ -2265,9 +2262,8 @@ function smb.resetMacro(macro)
     end
     local stored = storedSettings(macro)
     if not noCopies then
-        for _, copy in ipairs({{enemyPlayer = true}, {nearest = true}}) do
-            copy.name = macro.name
-            for _, pair in ipairs(storedSettings(copy)) do stored[#stored + 1] = pair end
+        for _, pair in ipairs(storedSettings({name = macro.name, enemyPlayer = true})) do
+            stored[#stored + 1] = pair
         end
     end
     for _, pair in ipairs(stored) do settings(pair[1])[pair[2]] = nil end
@@ -2331,14 +2327,51 @@ function smb.deleteMacroNamed(name)
     generalMacros()[name] = nil
 end
 
--- A spell's copy turned on by a COPY_OPTIONS key ("enemyPlayer" or "nearest"), from
--- smb.macros, or nil.
+-- A spell's copy turned on by a COPY_OPTIONS key ("enemyPlayer"), from smb.macros, or nil.
 function smb.copyOf(spell, key)
     for _, macro in ipairs(smb.macros) do
-        if macro.name == spell and not macro.variant and (key == "enemyPlayer" and macro.enemyPlayer or key == "nearest" and macro.nearest) then
+        if macro.name == spell and not macro.variant and key == "enemyPlayer" and macro.enemyPlayer then
             return macro
         end
     end
+end
+
+-- The buffs spell an old nearest copy's WoW macro name (cut to limit characters before its suffix) was made
+-- from (see spellMacroName), or nil when none matches, e.g. a name numbered to settle a clash.
+local function oldNearestSpell(prefix, limit)
+    for name, macro in pairs(smb.macroByName) do
+        if macro.buff and (name:sub(1, limit) == prefix or keepLastWord(name, limit) == prefix) then return name end
+    end
+end
+
+-- Once per character, notes the WoW macros of the old nearest copies (" @N", or " @N #2" for a variant; see
+-- migrate) as copies turned off, so the action bars put their spell's own macro, which now casts on the
+-- nearest player itself, in their place and delete them. Read from the macros themselves, account and
+-- character ones alike: their names may have been cut to settle a clash. Needs the macros loaded and
+-- smb.macros built.
+function smb.noteOldNearestCopies()
+    MacroSpellbookCharDB = MacroSpellbookCharDB or {}
+    if MacroSpellbookCharDB.nearestCopiesRemoved then return end
+    for key in pairs(variants()) do
+        if isOldCopyKey(key) then MacroSpellbookCharDB.variants[key] = nil end
+    end
+    local numAccount, numCharacter = GetNumMacros()
+    local indexes = {}
+    for index = 1, numAccount do indexes[#indexes + 1] = index end
+    for index = maxAccountMacros() + 1, maxAccountMacros() + numCharacter do indexes[#indexes + 1] = index end
+    for _, index in ipairs(indexes) do
+        local name = GetMacroInfo(index)
+        local prefix, number
+        if name then
+            prefix, number = name:match("^(.-) @N #(%d+)$")
+            if not prefix then prefix = name:match("^(.-) @N$") end
+        end
+        if prefix then
+            local limit = MAX_MACRO_NAME - #(" @N" .. (number and " #" .. number or ""))
+            removedCopies[#removedCopies + 1] = {macroName = name, spell = oldNearestSpell(prefix, limit), copy = {}}
+        end
+    end
+    MacroSpellbookCharDB.nearestCopiesRemoved = true
 end
 
 -- Whether copies were turned off since the last smb.takeRemovedCopies.
