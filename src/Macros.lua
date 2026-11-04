@@ -155,6 +155,17 @@ function smb.setTargetsEnemyByDefault(on)
     MacroActionBarDB.targetEnemyDefault = on or nil
 end
 
+-- Whether friendly spell macros fall back to you: on a live friendly target when not cast on the mouseover
+-- (or focus), else on you, whatever the client's Auto Self Cast setting (see selfFallback).
+function smb.fallsBackToSelf()
+    return MacroActionBarDB ~= nil and MacroActionBarDB.selfFallback == true
+end
+
+function smb.setFallsBackToSelf(on)
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.selfFallback = on or nil
+end
+
 -- The settings with a default; each spell macro stores one only where it differs from the default.
 local DEFAULTED = { petAttack = true, stopCast = true, startAttack = true }
 
@@ -1006,6 +1017,14 @@ local function cond(spam, ...)
     return #parts > 0 and "[" .. table.concat(parts, ",") .. "]" or ""
 end
 
+-- Whether a macro's spell, when cast on the target, goes to a live friendly target, else to you, rather than
+-- leaving it to the client's Auto Self Cast setting: friendly spell macros, with smb.fallsBackToSelf on. An
+-- enemy player copy casts on its own target, so it never does.
+local function selfFallback(macro)
+    return smb.fallsBackToSelf() and macro.target == "help" and not macro.custom and not macro.equipment
+        and not macro.enemyPlayer
+end
+
 -- A /cast of name that tries each target conditional in turn ("" for none), with a rank 1 cast under when
 -- (e.g. "group:raid") before each one. prefix ("" for none) goes before the clauses: the modifier clauses.
 local function rank1Cast(name, targets, spam, prefix, when)
@@ -1040,10 +1059,15 @@ local function targetedClause(condition, other, noToggle, castOn)
     elseif castOn == "target" then
         castOn = nil
     end
+    -- the target clause: the plain target, or a live friendly target then you (see selfFallback)
+    local onTarget = "[" .. (condition or "") .. "]"
+    if selfFallback(other) then onTarget = cond(nil, condition, "help,nodead") .. cond(nil, condition, "@player") end
     if castOn == "cursor" then
         conditional = cond(nil, condition, "@cursor")
     elseif castOn == "mouseover" or castOn == "focus" then
-        conditional = cond(nil, condition, "@" .. castOn .. "," .. other.target .. ",nodead") .. "[" .. (condition or "") .. "]"
+        conditional = cond(nil, condition, "@" .. castOn .. "," .. other.target .. ",nodead") .. onTarget
+    elseif castOn == nil and selfFallback(other) then
+        conditional = onTarget
     end
     return (conditional ~= "" and conditional .. " " or "") .. name .. "; "
 end
@@ -1347,6 +1371,9 @@ local function castBody(macro)
         return "/cast " .. mods .. prefix .. name
     end
     local castOn = smb.castOn(macro)
+    -- a friendly spell falling back to you casts on a live friendly target, else on you, where it would cast
+    -- on the target (see selfFallback)
+    local fallback = selfFallback(macro) and castOn ~= "nearest" and castOn ~= "cursor"
     -- a downranked macro casts rank 1 in a raid group ("raid") or out of combat ("combat"), and its highest
     -- rank otherwise. A sequence can't downrank: a rank 1 clause per target would repeat every step
     if rank ~= nil and not steps then
@@ -1359,6 +1386,10 @@ local function castBody(macro)
             targets = {"@cursor"}
         elseif castOn == "mouseover" or castOn == "focus" then
             targets = {"@" .. castOn .. "," .. macro.target .. ",nodead", ""}
+        end
+        if fallback then
+            targets[#targets] = "help,nodead"
+            targets[#targets + 1] = "@player"
         end
         return header .. (castOn == "nearest" and NEAREST_LINE or "") .. (macro.enemyPlayer and ENEMY_LINE or "")
             .. rank1Cast(name, targets, spam, mods, RANK_CONDITION[rank]) .. (macro.enemyPlayer and LAST_TARGET_FOOTER or "")
@@ -1381,9 +1412,11 @@ local function castBody(macro)
     if castOn == "cursor" then
         return header .. cast(cond(spam, "@cursor"))
     end
+    local onTarget = fallback and cond(spam, "help,nodead") .. cond(spam, "@player") or "[" .. (spam or "") .. "]"
     if castOn == "mouseover" or castOn == "focus" then
-        return header .. cast(cond(spam, "@" .. castOn .. "," .. macro.target .. ",nodead") .. "[" .. (spam or "") .. "]")
+        return header .. cast(cond(spam, "@" .. castOn .. "," .. macro.target .. ",nodead") .. onTarget)
     end
+    if fallback then return header .. cast(onTarget) end
     return header .. cast(cond(spam))
 end
 

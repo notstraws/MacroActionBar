@@ -1025,6 +1025,10 @@ local function buildPage(page)
             smb.setTargetsEnemyByDefault(not smb.targetsEnemyByDefault())
             refresh(page) -- rewrites the macros that follow the default
         end)
+        rootDescription:CreateCheckbox("Friendly spells fall back to yourself", smb.fallsBackToSelf, function()
+            smb.setFallsBackToSelf(not smb.fallsBackToSelf())
+            refresh(page) -- rewrites the friendly spell macros
+        end)
         if smb.classOffersPetAttack() then
             rootDescription:CreateCheckbox("Enable Pet attacks before spell cast", smb.petAttacksByDefault, function()
                 smb.setPetAttacksByDefault(not smb.petAttacksByDefault())
