@@ -406,12 +406,12 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             -- a spell that can be cast anywhere but its target gets a Cast On submenu, set for this key alone:
             -- Target (smb.modifierCastOn's nil), then the modes the spell offers. Clicking the spell itself
             -- picks it on Target
-            local function addCastOn(radio, name)
-                local other = smb.macroByName[name]
-                if not smb.offersCastOn(other, "mouseover") and not smb.offersCastOn(other, "cursor") then return end
+            local function addPickCastOn(radio, name)
+                local picked = smb.macroByName[name]
+                if not smb.offersCastOn(picked, "mouseover") and not smb.offersCastOn(picked, "cursor") then return end
                 radio:CreateTitle("Cast On")
                 local function addMode(modeLabel, mode)
-                    if mode ~= nil and not smb.offersCastOn(other, mode) then return end
+                    if mode ~= nil and not smb.offersCastOn(picked, mode) then return end
                     radio:CreateRadio(modeLabel, function()
                         return smb.modifierSpell(macro, mod) == name and smb.modifierCastOn(macro, mod) == mode
                     end, function() pick(name, mode) end)
@@ -426,7 +426,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                 local sectionMenu = submenu:CreateButton(sectionLabel(section.name))
                 for _, name in ipairs(section) do
                     listed = listed or name == current
-                    addCastOn(sectionMenu:CreateRadio(name,
+                    addPickCastOn(sectionMenu:CreateRadio(name,
                         function() return smb.modifierSpell(macro, mod) == name end,
                         function() pick(name) end), name)
                 end
