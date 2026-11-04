@@ -4,13 +4,13 @@ local _, smb = ...
 -- bundled data (Data/) misses. Trainer lists live on the server, so a trainer window is the only place the
 -- game shows them.
 
--- MacroSpellbookCharDB.trainerSpells: spell id -> required level, for each spell a trainer offered (every
+-- MacroActionBarCharDB.trainerSpells: spell id -> required level, for each spell a trainer offered (every
 -- rank: Macros.lua keeps rank 1). Read lazily: saved variables are not loaded until ADDON_LOADED, after this
 -- file runs.
 local function recorded()
-    MacroSpellbookCharDB = MacroSpellbookCharDB or {}
-    MacroSpellbookCharDB.trainerSpells = MacroSpellbookCharDB.trainerSpells or {}
-    return MacroSpellbookCharDB.trainerSpells
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
+    MacroActionBarCharDB.trainerSpells = MacroActionBarCharDB.trainerSpells or {}
+    return MacroActionBarCharDB.trainerSpells
 end
 
 -- The recorded trainer spells as Data/ style entries ({level, id}), lowest level first.

@@ -123,7 +123,7 @@ end
 
 local function scan()
     if not scanReady or InCombatLockdown() then return end -- leaving combat scans again
-    if GetCursorInfo() or (MacroSpellbookCharDB and MacroSpellbookCharDB.restorePending) then
+    if GetCursorInfo() or (MacroActionBarCharDB and MacroActionBarCharDB.restorePending) then
         C_Timer.After(SCAN_RETRY, scheduleScan)
         return
     end

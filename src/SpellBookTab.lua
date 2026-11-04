@@ -1,6 +1,6 @@
 local addonName, smb = ...
 
--- Adds a "Macro Spellbook" tab to the spellbook. LibSpellBookTabs owns the tab, its placement and
+-- Adds a "Macro Action Bar" tab to the spellbook. LibSpellBookTabs owns the tab, its placement and
 -- the parchment page; this file only draws smb.macros (built by Macros.lua) onto the page.
 
 local ICON_MACRO = "Interface\\MacroFrame\\MacroFrame-Icon" -- the "M" key shown on Blizzard's macro window
@@ -891,7 +891,7 @@ local function layout(page)
     if #halves == 0 then
         local header = page.headers:Acquire()
         header:SetPoint("TOPLEFT", page, "TOPLEFT", origins[1], VIEW_TOP)
-        setHeader(header, "Macro Spellbook", viewWidth)
+        setHeader(header, "Macro Action Bar", viewWidth)
         page.empty:SetText(#smb.macros == 0 and "No macros found."
             or "No macros match \"" .. page.search:GetText() .. "\".")
         page.empty:ClearAllPoints()
@@ -1116,7 +1116,7 @@ end
 
 local LSBT = LibStub("LibSpellBookTabs-1.0")
 LSBT:RegisterTab(addonName, {
-    name = "Macro Spellbook",
+    name = "Macro Action Bar",
     icon = ICON_MACRO,
     iconTexCoords = ICON_MACRO_COORDS,
     side = true,

@@ -1,6 +1,6 @@
 local _, smb = ...
 
--- Each class has its own file in this folder that decides how its Macro Spellbook page is organised.
+-- Each class has its own file in this folder that decides how its Macro Action Bar page is organised.
 -- Edit your class's file, then /reload. Every list is optional.
 --
 -- Use spell names exactly as the spellbook shows them. A name ending in * matches every spell that starts

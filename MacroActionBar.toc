@@ -1,10 +1,10 @@
 ## Interface: 16001
-## Title: Macro Spellbook
+## Title: Macro Action Bar
 ## Notes: Adds a spellbook tab of one-click macros for your class's spells, with mouseover and cursor options.
 ## Author: NotStraws
 ## Version: @project-version@
-## SavedVariables: MacroSpellbookDB
-## SavedVariablesPerCharacter: MacroSpellbookCharDB
+## SavedVariables: MacroActionBarDB
+## SavedVariablesPerCharacter: MacroActionBarCharDB
 
 libs\LibStub\LibStub.lua
 libs\LibSpellBookTabs-1.0\LibSpellBookTabs-1.0.lua
