@@ -41,7 +41,7 @@ local _, smb = ...
 --   A spell's macro (or one of its second macros) can be on several action buttons: they share it, and a
 --   change on the page applies to all of them. A change from one button's right-click menu applies to that
 --   button alone: when other buttons hold the macro too, that button gets a numbered variant, e.g. "Fireball
---   #2", with the change, and the others keep the macro as it was. "Duplicate Macro" (right-click) makes a
+--   #2", with the change, and the others keep the macro as it was. "Duplicate Macro" (right-click on the page) makes a
 --   variant too, to set up on its own. Variants are this character's and last until "Delete Macro" (which takes it
 --   off its buttons too), or until a change makes one the same as another macro of the
 --   spell: then they merge, the spell's own macro (or the lower number) taking the other's buttons.

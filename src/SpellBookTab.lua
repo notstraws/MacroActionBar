@@ -52,8 +52,8 @@ local function menuOrder(sections, first)
 end
 
 -- Every spell macro has a menu; custom macros don't. An enemy player, nearest or combat rank copy's menu has its own
--- options, apart from its spell's. Every spell macro's menu ends with Duplicate Macro (a variant's also with
--- Delete Macro), and every menu with Reset To Default. The menu opens at owner (a page button, or an action
+-- options, apart from its spell's. Every spell macro's menu on the page ends with Duplicate Macro (a variant's
+-- also with Delete Macro), and every menu but a variant's with Reset To Default. The menu opens at owner (a page button, or an action
 -- button holding the macro), and calls onChange after every change. Opened from an action button, actionSlot
 -- is its action slot: a change there applies to that button alone (see smb.editMacro), and turning a copy on
 -- there puts the copy on that button. plainSpell is true when that button holds the plain spell (placed from
@@ -80,7 +80,6 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
     local function addOptions(rootDescription)
         -- an equipment macro's menu is titled by its one section instead
         if not macro.equipment then rootDescription:CreateTitle(macro.name) end
-        if plainSpell then rootDescription:CreateTitle("Modifying this spell will turn it into a macro and be placed in the Macro Spellbook") end
         local function addOption(label, key)
             return rootDescription:CreateCheckbox(label,
                 function() return smb.isOptionOn(macro, key) end,
@@ -467,11 +466,11 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
         if not smb.offersReset(macro) then return end
         rootDescription:CreateDivider()
         local function outOfCombat() return not InCombatLockdown() end
-        -- Duplicate Macro adds a variant of a spell macro, set up the same (and put on this button, from an
-        -- action bar), to set up apart. A plain spell has no macro on its button to duplicate yet
-        if not macro.equipment and not plainSpell then
+        -- Duplicate Macro adds a variant of a spell macro, set up the same, to set up apart. Only on the page:
+        -- a button on an action bar already gets its own copy when changed
+        if not macro.equipment and not actionSlot then
             rootDescription:CreateButton("Duplicate Macro", function()
-                if smb.duplicateMacro(macro, actionSlot) then onChange() end
+                if smb.duplicateMacro(macro) then onChange() end
             end):SetEnabled(outOfCombat)
         end
         -- Delete Macro deletes a variant and takes it off its buttons
@@ -481,11 +480,13 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                 onChange()
             end):SetEnabled(outOfCombat)
         end
-        -- at the bottom of every menu, greyed out while nothing differs from the defaults
-        rootDescription:CreateButton("Reset To Default", function()
-            if not change(smb.resetMacro) then return end
-            onChange() -- removes the copies, and rewrites the subtext
-        end):SetEnabled(function() return smb.hasCustomSettings(macro) end)
+        -- at the bottom of every menu but a variant's, greyed out while nothing differs from the defaults
+        if not macro.variant then
+            rootDescription:CreateButton("Reset To Default", function()
+                if not change(smb.resetMacro) then return end
+                onChange() -- removes the copies, and rewrites the subtext
+            end):SetEnabled(function() return smb.hasCustomSettings(macro) end)
+        end
     end)
 end
 
@@ -965,6 +966,9 @@ local function buildPage(page)
     end
     options:SetupMenu(function(_, rootDescription)
         rootDescription:CreateTitle("Settings")
+        rootDescription:CreateCheckbox("Open spellbook to this page", smb.opensOnSpellbook, function()
+            smb.setOpensOnSpellbook(not smb.opensOnSpellbook())
+        end)
         rootDescription:CreateCheckbox("Show unlearned spells", smb.showsUnlearned, function()
             smb.setShowUnlearned(not smb.showsUnlearned())
             if page.pagingControls.SetCurrentPage then
@@ -1113,6 +1117,13 @@ LSBT:RegisterTab(addonName, {
     onCreate = buildPage,
     onShow = refresh,
 })
+
+-- with the setting on, the spellbook opens on this page; a native tab still switches away until it reopens
+EventUtil.ContinueOnAddOnLoaded("Blizzard_PlayerSpells", function()
+    PlayerSpellsFrame.SpellBookFrame:HookScript("OnShow", function()
+        if smb.opensOnSpellbook() then LSBT:Open(addonName) end
+    end)
+end)
 
 smb.ICON_MACRO, smb.ICON_MACRO_COORDS = ICON_MACRO, ICON_MACRO_COORDS
 
