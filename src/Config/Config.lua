@@ -17,7 +17,7 @@ local _, smb = ...
 --   section, e.g. Damage or Healing, to offer its spells in cooldown spells' "Then Cast" menus. Add
 --   menuLast = true to a section to list it last in the right-click submenus, e.g. Druids' Forms.
 --
--- mouseoverEnemy / mouseoverFriend: spells that offer "Cast On Mouseover" (right-click a macro), cast on a
+-- mouseoverEnemy / mouseoverFriend: spells that offer Cast On "Mouseover" (right-click a macro), cast on a
 --   hostile / friendly mouseover target. A spell in both lists casts on either. Every harmful spell with a
 --   range (melee included) counts as a mouseoverEnemy spell without being listed, except cursor spells, so
 --   mouseoverEnemy only needs the ones the game doesn't flag. Other spells in neither list never offer
@@ -46,7 +46,7 @@ local _, smb = ...
 --   off puts the spell's own macro back on its buttons. Right-clicking a plain spell placed from Blizzard's
 --   spellbook opens its macro's menu too: the first change puts the macro on that button in the spell's place.
 --
--- cursor: ground-targeted spells that offer "Cast At Cursor" (right-click a macro): the spell lands where
+-- cursor: ground-targeted spells that offer Cast On "Cursor" (right-click a macro): the spell lands where
 --   the cursor points, with no targeting circle to click.
 --
 -- raidRank1: spells that offer "Downrank In Raids" (right-click a macro): the macro casts the spell's rank 1
@@ -55,8 +55,8 @@ local _, smb = ...
 -- combatRank1: spells that offer "Rank 1 Out Of Combat" (right-click a macro): the page then also lists a second
 --   macro for the spell, right after it (and its other second macros), that casts the spell's rank 1 while you
 --   are out of combat and its highest rank in combat, e.g. a cheap Arcane Explosion to pull a group. Like the
---   other second macros it has its own right-click options, and it offers "Cast On Mouseover" and "Cast At
---   Cursor" like the spell's own macro. It has no Sequence, "Downrank In Raids" or modifier keys.
+--   other second macros it has its own right-click options, and it offers Cast On "Mouseover" and "Cursor"
+--   like the spell's own macro. It has no Sequence, "Downrank In Raids" or modifier keys.
 --
 -- channeled: channelled spells that offer "Don't Recast While Channeling" (right-click a macro): the cast
 --   gets a [nochanneling:<spell>] condition, so pressing the macro again while the spell is channelling does
@@ -144,7 +144,7 @@ local _, smb = ...
 -- Modifier keys aren't set here either: right-click a spell macro for its "Shift", "Ctrl" and "Alt" menus,
 --   where you pick another learned spell, by section, that the macro casts while that key is held. With
 --   several keys held, Shift wins over Ctrl and Ctrl over Alt. The picked spell is cast the way its own
---   macro targets: turn on "Cast On Mouseover" (or "Cast At Cursor") for that spell's macro and every macro
+--   macro targets: set Cast On to "Mouseover" (or "Cursor") for that spell's macro and every macro
 --   using it with a modifier follows. A spell with "Cast On Focus" on is also listed as "<spell> (Focus)",
 --   the macro's own spell included: it casts on your focus target (or your target when you have none),
 --   and turning that spell's focus macro off clears the pick. The "Equipment" submenu instead picks an
@@ -158,7 +158,7 @@ local _, smb = ...
 --   its "Sequence" menu, where you tick other learned spells from sequence = true sections in the order the
 --   macro should cast them after its own spell: each press casts the next one (/castsequence). The sequence starts over from its first spell
 --   after 2 seconds without a press. Every step is cast the way the macro's own spell is, e.g. on the
---   mouseover target with "Cast On Mouseover" on. "Downrank In Raids" is off while a sequence is set, and a
+--   mouseover target with Cast On set to "Mouseover". "Downrank In Raids" is off while a sequence is set, and a
 --   macro that casts its pet's ability has no sequence.
 --
 -- extraSpells: spell IDs to list with "Show Unlearned" on until learned, for spells that neither the
