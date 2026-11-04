@@ -51,14 +51,14 @@ local function menuOrder(sections, first)
     return ordered
 end
 
--- Every spell macro has a menu; custom macros don't. An enemy player or nearest copy's menu has its own
+-- Every spell macro has a menu; custom macros don't. An enemy player copy's menu has its own
 -- options, apart from its spell's. Every spell macro's menu on the page ends with Duplicate Macro (a variant's
 -- also with Delete Macro), and every menu but a variant's with Reset To Default. The menu opens at owner (a page button, or an action
 -- button holding the macro), and calls onChange after every change. Opened from an action button, actionSlot
 -- is its action slot: a change there applies to that button alone (see smb.editMacro), and turning a copy on
 -- there puts the copy on that button. plainSpell is true when that button holds the plain spell (placed from
 -- Blizzard's spellbook) whose macro this is.
-local COPY_KEYS = {enemyPlayer = true, nearest = true}
+local COPY_KEYS = {enemyPlayer = true}
 
 -- The Rank submenu's choices, in order: smb.rank's values (none for Normal) and their labels. Rank 1 Out Of
 -- Combat ("combat") is a checkbox of its own instead.
@@ -89,7 +89,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                     -- adds, removes or rewrites the copy, and rewrites the macros casting this spell with a
                     -- modifier key
                     onChange()
-                    local isCopy = macro.enemyPlayer or macro.nearest
+                    local isCopy = macro.enemyPlayer
                     if actionSlot and COPY_KEYS[key] and not isCopy and smb.isOptionOn(macro, key) then
                         local copy = smb.copyOf(macro.name, key)
                         -- the button now holds the copy, so this menu no longer describes it
@@ -97,12 +97,12 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                     end
                 end)
         end
-        -- the Cast On radios: Target, then Mouseover, Focus and Cursor where the macro offers them (see
+        -- the Cast On radios: Target, then Mouseover, Focus, Cursor and Nearest Player where the macro offers them (see
         -- smb.offersCastOn), or none when it offers only Target. Greyed out while the macro casts its pet's
         -- ability, which casts on none of them
         local function addCastOn()
             if not smb.offersCastOn(macro, "mouseover") and not smb.offersCastOn(macro, "focus")
-                and not smb.offersCastOn(macro, "cursor") then return end
+                and not smb.offersCastOn(macro, "cursor") and not smb.offersCastOn(macro, "nearest") then return end
             rootDescription:CreateTitle("Cast On")
             local function addMode(label, mode)
                 if not smb.offersCastOn(macro, mode) then return end
@@ -117,6 +117,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             addMode("Mouseover", "mouseover")
             addMode("Focus", "focus")
             addMode("Cursor", "cursor")
+            addMode("Nearest Player", "nearest")
             rootDescription:CreateDivider()
         end
         -- the Sequence submenu: the spells cast after the macro's own, ticked in order: the ones
@@ -216,12 +217,10 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
         -- casts on its fixed target and offers no copies of its own.
         -- A variant has the options of the macro it came from, but none that add or remove a copy: those are its
         -- spell's
-        local isCopy = macro.enemyPlayer or macro.nearest
+        local isCopy = macro.enemyPlayer
         local removable = not macro.variant
         if macro.enemyPlayer then
             if removable then addOption("Cast On Enemy Player", "enemyPlayer") end
-        elseif macro.nearest then
-            if removable then addOption("Cast On Nearest Player", "nearest") end
         else
             addCastOn()
             if macro.petAbility then addOption("Cast " .. macro.petAbility .. " If Summoned", "pet") end
@@ -260,12 +259,11 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                     onChange() -- rewrites the macro and its subtext
                 end):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
         end
-        -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Nearest Player instead
+        -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Enemy Player instead
         local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
         if macro.spam and not noToggle then addOption(spamLabels(macro)[1], "spam") end
         if not isCopy and not macro.variant then
             if macro.dispel then addOption("Cast On Enemy Player", "enemyPlayer") end
-            if macro.buff then addOption("Cast On Nearest Player", "nearest") end
         end
         if noToggle then addOption(spamLabels(macro)[1], "spam") end
         -- one submenu per side of the cast: /cast !Auto Shot, /startattack, /stopattack, /petattack, /petfollow, the offGcd spells, the race's racials and the equipped
@@ -730,9 +728,6 @@ function setMacro(button, macro, bars)
     elseif macro.enemyPlayer then
         button.subText:SetText("Enemy")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif macro.nearest then
-        button.subText:SetText("Nearest")
-        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "pet") then
         button.subText:SetText("Pet")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
@@ -744,6 +739,9 @@ function setMacro(button, macro, bars)
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.castOn(macro) == "focus" then
         button.subText:SetText("Focus")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif smb.castOn(macro) == "nearest" then
+        button.subText:SetText("Nearest")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasSequenceOn(macro) then
         button.subText:SetText("Sequence")
