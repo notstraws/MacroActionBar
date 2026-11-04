@@ -48,7 +48,9 @@ end
 -- for that slot starts with /stopattack (or /stopcasting) before using the item. "modifiers" holds a table
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held
 -- (see smb.modifierSpell), or uses the item in
--- equipment slot shiftSlot (ctrlSlot, altSlot) instead (see smb.modifierSlot). "sequence" holds a
+-- equipment slot shiftSlot (ctrlSlot, altSlot) instead (see smb.modifierSlot). shiftCastOn (ctrlCastOn,
+-- altCastOn) sets where that key's spell is cast: "mouseover", "focus" or "cursor", or the target when unset (see
+-- smb.modifierCastOn). "sequence" holds a
 -- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "followUp"
 -- holds a cooldown spell's one spell name: the macro casts it on the same press, after its own. "forms"
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
@@ -423,7 +425,7 @@ local removedCopies = {} -- the WoW macro names of copies turned off since smb.t
 -- The saved settings' format: 2 stores where a macro casts as one "castOn" setting instead of the old
 -- "mouseover" and "cursor" flags; 3 casts on the focus target as a "castOn" mode instead of a focus copy; 4
 -- casts on the nearest friendly player as a "castOn" mode instead of a nearest copy.
-local SCHEMA = 4
+local SCHEMA = 5
 
 -- The settings keys of the old copies migrate drops: focus copies ("<spell> @F") and nearest copies
 -- ("<spell> @N"), with their variants ("<spell> @N #2").
@@ -444,7 +446,9 @@ end
 -- modifier picks' focus flags, so a pick casts like its spell's own macro. The spell's own macro keeps casting
 -- where it did. From 3, the nearest copies go the same way: a spell that had one casts on the nearest player
 -- itself, unless it already cast somewhere other than its target, and the copies' own settings (stored under
--- "<spell> @N") are dropped. Their WoW macros are removed per character (see smb.noteOldNearestCopies).
+-- "<spell> @N") are dropped. Their WoW macros are removed per character (see smb.noteOldNearestCopies). From 4,
+-- a modifier pick no longer follows its spell's own Cast On but has its own (see smb.modifierCastOn), so each
+-- pick takes the Mouseover, Focus or Cursor its spell had and keeps casting where it did.
 local function migrate()
     MacroActionBarDB = MacroActionBarDB or {}
     local schema = MacroActionBarDB.schema or 1
@@ -475,6 +479,19 @@ local function migrate()
     end
     for _, spells in pairs(settings("modifiers")) do
         spells.shiftFocus, spells.ctrlFocus, spells.altFocus = nil, nil, nil
+    end
+    if schema < 5 then
+        local castOn = settings("castOn")
+        for _, spells in pairs(settings("modifiers")) do
+            for _, mod in ipairs(smb.MODIFIERS) do
+                local mode = spells[mod] and castOn[spells[mod]]
+                if spells[mod .. "CastOn"] == "target" then
+                    spells[mod .. "CastOn"] = nil
+                elseif spells[mod .. "CastOn"] == nil and mode ~= "nearest" then
+                    spells[mod .. "CastOn"] = mode
+                end
+            end
+        end
     end
     MacroActionBarDB.schema = SCHEMA
 end
@@ -797,6 +814,14 @@ function smb.modifierSlot(macro, mod)
     return spells and spells[mod .. "Slot"]
 end
 
+-- Where a macro casts the spell set for a modifier key: "mouseover", "focus" or "cursor", or nil on the target.
+function smb.modifierCastOn(macro, mod)
+    if not smb.offersModifiers(macro) then return nil end
+    migrate()
+    local spells = settings("modifiers")[settingKey(macro)]
+    return spells and spells[mod .. "CastOn"]
+end
+
 -- Whether a macro has a spell or an equipment slot set for any modifier key.
 function smb.hasModifierOn(macro)
     for _, mod in ipairs(smb.MODIFIERS) do
@@ -1006,11 +1031,15 @@ smb.macroByMacroName = {}
 -- spell cast on the nearest player is cast on the target: targeting the nearest player takes lines of its own. With
 -- noToggle, a toggle spell, such as an aspect, is always cast as "!<spell>", whatever its own page macro's
 -- spam option. With no condition (nil), the clause has none of its own, e.g. "[@cursor] Blizzard; ", or
--- "Fireball; " for a plain cast.
-local function targetedClause(condition, other, noToggle)
+-- "Fireball; " for a plain cast. castOn ("target", "mouseover", "focus" or "cursor") casts it there instead.
+local function targetedClause(condition, other, noToggle, castOn)
     local name = noToggle and other.spam == NO_TOGGLE and NO_TOGGLE .. other.name or smb.castName(other)
     local conditional = condition and "[" .. condition .. "]" or ""
-    local castOn = smb.castOn(other)
+    if castOn == nil then
+        castOn = smb.castOn(other)
+    elseif castOn == "target" then
+        castOn = nil
+    end
     if castOn == "cursor" then
         conditional = cond(nil, condition, "@cursor")
     elseif castOn == "mouseover" or castOn == "focus" then
@@ -1020,7 +1049,7 @@ local function targetedClause(condition, other, noToggle)
 end
 
 -- The line casting a cooldown macro's follow-up spell (see smb.offersFollowUp), starting with a newline, the
--- way that spell's own page macro targets, like a modifier spell; "" when it has none.
+-- way that spell's own page macro targets (see targetedClause); "" when it has none.
 local function followUpLine(macro)
     local other = followUpMacro(macro)
     if not other then return "" end
@@ -1028,8 +1057,8 @@ local function followUpLine(macro)
 end
 
 -- The clauses that cast a macro's modifier spells, each followed by "; ", ready to go before its own, e.g.
--- "[mod:shift] Fear; [mod:alt,@mouseover,help,nodead][mod:alt] Flash Heal; ", or "". Each spell is cast the
--- way its own page macro targets: at the mouseover, the focus or the cursor when that option is on there. A
+-- "[mod:shift] Fear; [mod:alt,@mouseover,help,nodead][mod:alt] Flash Heal; ", or "". Each spell is cast where
+-- that key's Cast On says (see smb.modifierCastOn), on the target by default. A
 -- toggle spell, such as an aspect, is always cast as "!<spell>", so holding the key and pressing again never
 -- toggles it off. A spell that isn't learned is left out, keeping its setting. An equipment pick uses whatever
 -- is in its slot, e.g. "[mod:ctrl] 13; ", like the useItems lines.
@@ -1041,7 +1070,10 @@ local function modifierClauses(macro)
         if slot then
             clauses[#clauses + 1] = "[mod:" .. mod .. "] " .. slot .. "; "
         elseif other and not other.unlearned then
-            clauses[#clauses + 1] = targetedClause("mod:" .. mod, other, true)
+            -- on the target unless the pick's Cast On is one the spell offers
+            local castOn = smb.modifierCastOn(macro, mod)
+            if not (castOn and smb.offersCastOn(other, castOn)) then castOn = "target" end
+            clauses[#clauses + 1] = targetedClause("mod:" .. mod, other, true, castOn)
         end
     end
     return table.concat(clauses)
@@ -1110,7 +1142,7 @@ end
 
 -- The clauses that cast a macro's form spells, each followed by "; ", ready to go after its modifier
 -- clauses, e.g. "[form:3] Shred; [form:1,@mouseover,harm,nodead][form:1] Faerie Fire (Feral); ", or "". Each
--- spell is cast the way its own page macro targets, like a modifier spell.
+-- spell is cast the way its own page macro targets, like a follow-up spell.
 local function formClauses(macro)
     local clauses = {}
     for _, pick in ipairs(formPicks(macro)) do clauses[#clauses + 1] = targetedClause(pick[1], pick[2]) end
@@ -2146,12 +2178,13 @@ function smb.toggleRacial(macro, racial, side)
 end
 
 -- Sets the spell a macro casts while a modifier key ("shift", "ctrl" or "alt") is held, or clears it with
--- nil, then rewrites the macro like smb.toggleOption.
-function smb.setModifierSpell(macro, mod, name)
+-- nil, then rewrites the macro like smb.toggleOption. castOn ("mouseover", "focus" or "cursor", or nil for the
+-- target) sets where it is cast (see smb.modifierCastOn).
+function smb.setModifierSpell(macro, mod, name, castOn)
     local set = settings("modifiers")
     local spells = set[settingKey(macro)] or {}
-    spells[mod] = name
-    spells[mod .. "Slot"] = nil
+    spells[mod], spells[mod .. "Slot"] = name, nil
+    spells[mod .. "CastOn"] = name and castOn or nil
     set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end
@@ -2161,7 +2194,7 @@ end
 function smb.setModifierSlot(macro, mod, slot)
     local set = settings("modifiers")
     local spells = set[settingKey(macro)] or {}
-    spells[mod], spells[mod .. "Slot"] = nil, slot
+    spells[mod], spells[mod .. "Slot"], spells[mod .. "CastOn"] = nil, slot, nil
     set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end

@@ -74,7 +74,7 @@ local _, smb = ...
 -- cooldowns: spells such as Combustion that offer the "Then Cast" menu (right-click a macro) in whatever
 --   section they are, instead of a sequence. Pick one learned spell from a sequence = true or cooldownSteps =
 --   true section or from Unsorted, e.g. Fireball: the macro casts it on the same press, right after the cooldown, the way that
---   spell's own macro targets (see Modifier keys below). The second cast only goes off when the cooldown
+--   spell's own macro targets: at the mouseover, the focus or the cursor when its Cast On is set there. The second cast only goes off when the cooldown
 --   doesn't trigger the global cooldown. To use a trinket with it, tick the trinket in the macro's Before
 --   Casting menu.
 --
@@ -100,7 +100,7 @@ local _, smb = ...
 --   section, that the macro casts while you are in that form, e.g. Shred in Cat and Maul in Bear on the
 --   Wrath macro. spells are the shapeshift spells that count as the form; the first one learned is used, so
 --   list Dire Bear Form before Bear Form. A form with no spells is caster form (no shapeshift). The picked
---   spell is cast the way its own macro targets, like a modifier key's (see below), and a held modifier key
+--   spell is cast the way its own macro targets, like a follow-up (see cooldowns above), and a held modifier key
 --   wins over the form. A section named after a form only offers its spells in that form, so Cat offers no
 --   Bear spells, Bear no Cat spells, and Caster neither. The submenu lists the form's section first, or the
 --   one named by section, e.g. { name = "Caster", section = "Damage" }. Druids use it for forms and
@@ -144,9 +144,9 @@ local _, smb = ...
 --
 -- Modifier keys aren't set here either: right-click a spell macro for its "Shift", "Ctrl" and "Alt" menus,
 --   where you pick another learned spell, by section, that the macro casts while that key is held. With
---   several keys held, Shift wins over Ctrl and Ctrl over Alt. The picked spell is cast the way its own
---   macro targets: set Cast On to "Mouseover" (or "Focus", or "Cursor") for that spell's macro and every
---   macro using it with a modifier follows. The "Equipment" submenu instead picks an
+--   several keys held, Shift wins over Ctrl and Ctrl over Alt. Hover a spell there for its Cast On
+--   submenu: "Target" (what clicking the spell picks), or "Mouseover", "Focus" or "Cursor" where the spell
+--   offers them, set for that key alone. The "Equipment" submenu instead picks an
 --   equipped item with a "Use:" effect (greyed out while you wear none): the macro uses whatever is in that
 --   slot, so it keeps working after you swap the item.
 --   Alt is the game's self-cast key by default, so a helpful Alt spell with no mouseover target may land on

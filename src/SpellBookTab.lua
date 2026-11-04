@@ -64,6 +64,9 @@ local COPY_KEYS = {enemyPlayer = true}
 -- Combat ("combat") is a checkbox of its own instead.
 local RANKS = {{label = "Normal"}, {rank = "raid", label = "Downrank In Raids"}}
 
+-- The labels of a modifier pick's Cast On modes but Target (see smb.modifierCastOn).
+local CAST_ON_LABELS = {mouseover = "Mouseover", focus = "Focus", cursor = "Cursor"}
+
 function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
     if not smb.hasOptions(macro) then return end
     -- every change goes through here: apply(m) changes macro m's settings. smb.editMacro may hand the change to
@@ -379,8 +382,9 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
         rootDescription:CreateDivider()
         for _, mod in ipairs(smb.MODIFIERS) do
             local label = MODIFIER_LABELS[mod]
-            local function pick(name)
-                if not change(function(m) smb.setModifierSpell(m, mod, name) end) then return end
+            -- picks a spell (nil for None), cast where castOn says (see smb.modifierCastOn)
+            local function pick(name, castOn)
+                if not change(function(m) smb.setModifierSpell(m, mod, name, castOn) end) then return end
                 onChange() -- rewrites the macro and its subtext
             end
             local function pickSlot(slot)
@@ -389,19 +393,42 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             end
             local current = smb.modifierSpell(macro, mod)
             local currentSlot = smb.modifierSlot(macro, mod)
+            local currentCastOn = smb.modifierCastOn(macro, mod)
+            local other = current and smb.macroByName[current]
+            if not (other and currentCastOn and smb.offersCastOn(other, currentCastOn)) then currentCastOn = nil end
             local submenu = rootDescription:CreateButton(label .. ": " .. (currentSlot and smb.slotLabel(currentSlot)
-                or current or "None"))
+                or current and current .. (currentCastOn and " (" .. CAST_ON_LABELS[currentCastOn] .. ")" or "")
+                or "None"))
             submenu:CreateTitle("Cast While " .. label .. " Is Held")
             submenu:CreateRadio("None", function()
                 return smb.modifierSpell(macro, mod) == nil and smb.modifierSlot(macro, mod) == nil
             end, function() pick(nil) end)
+            -- a spell that can be cast anywhere but its target gets a Cast On submenu, set for this key alone:
+            -- Target (smb.modifierCastOn's nil), then the modes the spell offers. Clicking the spell itself
+            -- picks it on Target
+            local function addCastOn(radio, name)
+                local other = smb.macroByName[name]
+                if not smb.offersCastOn(other, "mouseover") and not smb.offersCastOn(other, "cursor") then return end
+                radio:CreateTitle("Cast On")
+                local function addMode(modeLabel, mode)
+                    if mode ~= nil and not smb.offersCastOn(other, mode) then return end
+                    radio:CreateRadio(modeLabel, function()
+                        return smb.modifierSpell(macro, mod) == name and smb.modifierCastOn(macro, mod) == mode
+                    end, function() pick(name, mode) end)
+                end
+                addMode("Target", nil)
+                addMode("Mouseover", "mouseover")
+                addMode("Focus", "focus")
+                addMode("Cursor", "cursor")
+            end
             local listed = false
             for _, section in ipairs(menuOrder(sections)) do
                 local sectionMenu = submenu:CreateButton(sectionLabel(section.name))
                 for _, name in ipairs(section) do
                     listed = listed or name == current
-                    sectionMenu:CreateRadio(name, function() return smb.modifierSpell(macro, mod) == name end,
-                        function() pick(name) end)
+                    addCastOn(sectionMenu:CreateRadio(name,
+                        function() return smb.modifierSpell(macro, mod) == name end,
+                        function() pick(name) end), name)
                 end
             end
             -- a pick no longer learned (e.g. after a respec) stays listed, so the player sees why it does nothing
