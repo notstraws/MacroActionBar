@@ -2361,8 +2361,11 @@ function smb.noteOldNearestCopies()
     for index = maxAccountMacros() + 1, maxAccountMacros() + numCharacter do indexes[#indexes + 1] = index end
     for _, index in ipairs(indexes) do
         local name = GetMacroInfo(index)
-        local prefix, number = name and name:match("^(.-) @N #(%d+)$")
-        if not prefix then prefix = name and name:match("^(.-) @N$") end
+        local prefix, number
+        if name then
+            prefix, number = name:match("^(.-) @N #(%d+)$")
+            if not prefix then prefix = name:match("^(.-) @N$") end
+        end
         if prefix then
             local limit = MAX_MACRO_NAME - #(" @N" .. (number and " #" .. number or ""))
             removedCopies[#removedCopies + 1] = {macroName = name, spell = oldNearestSpell(prefix, limit), copy = {}}
