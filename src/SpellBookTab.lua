@@ -578,7 +578,7 @@ local BODY_WRAP = 40 -- characters per tooltip line for a macro body
 
 -- Adds a macro body to GameTooltip, one line per body line. A long line is broken after a space, ")", ";"
 -- or ",", since the tooltip's own wrapping spaces out a long line with few spaces badly.
-local function addBodyLines(body)
+function smb.addMacroBodyLines(body)
     for line in (body .. "\n"):gmatch("(.-)\n") do
         while #line > BODY_WRAP do
             local cut = BODY_WRAP
@@ -611,7 +611,7 @@ local function showTooltip(button)
         return
     end
     GameTooltip:SetText(macro.name)
-    addBodyLines(macro.body)
+    smb.addMacroBodyLines(macro.body)
     if macro.tooLong then
         GameTooltip:AddLine("Too long: " .. #macro.body .. "/255 characters. Turn off some options.",
             1, 0.1, 0.1, true)
