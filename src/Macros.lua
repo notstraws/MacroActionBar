@@ -1,7 +1,7 @@
 local addonName, smb = ...
 
 -- Builds the page's macro list (smb.macros) from the spellbook and the player's class config, and keeps
--- the WoW macros it creates in step with it. No frames here: SpellBookTab.lua draws the page.
+-- the WoW macros it creates in step with it. No UI here: SpellBookTab.lua draws the page.
 
 local ICON_QUESTION_MARK = 134400 -- Interface\Icons\INV_Misc_QuestionMark
 
@@ -19,7 +19,19 @@ local function maxAccountMacros()
     return MAX_ACCOUNT_MACROS or 120
 end
 
--- Per-account sets of spell names, keyed by setting: "castOn" (where the macro casts, see smb.castOn:
+-- The account's saved table under key: the equipment macros' settings, the variants' owners, the General
+-- macros, and the spell macros' settings from before each character got its own (see migrateCharacter).
+local function accountSettings(key)
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB[key] = MacroActionBarDB[key] or {}
+    return MacroActionBarDB[key]
+end
+
+-- The equipment macros' settings, keyed by the macro's slot (see settings).
+local EQUIPMENT_OPTIONS = { equipStopAttack = true, equipStopCast = true }
+
+-- This character's sets of spell names, keyed by setting (the account's until each character got its own, see
+-- migrateCharacter): "castOn" (where the macro casts, see smb.castOn:
 -- "mouseover", on the mouseover unit first, "focus", on the focus target first, "cursor", a ground-targeted
 -- spell where the cursor points, or "nearest", a buffs spell on the nearest friendly player; it replaced the old
 -- "mouseover" and "cursor" sets and the old "focus" and "nearest" copies, see migrate), "enemyPlayer" (the page
@@ -56,12 +68,16 @@ end
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
 -- the class config's forms (see smb.formSpell). An enemy player copy stores its
 -- own settings under its spell's name plus the copy's suffix, e.g. "Dispel Magic @E" (see settingKey), and a
--- variant under the key of the macro it came from plus " #<n>", e.g. "Fireball #2" (see variants).
+-- variant under the key of the macro it came from plus " #<n>", e.g. "Fireball #2" (see variants). The
+-- equipment macros' settings ("equipStopAttack" and "equipStopCast") stay the account's, like the macros.
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
 local function settings(key)
-    MacroActionBarDB = MacroActionBarDB or {}
-    MacroActionBarDB[key] = MacroActionBarDB[key] or {}
-    return MacroActionBarDB[key]
+    if EQUIPMENT_OPTIONS[key] then return accountSettings(key) end
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
+    local char = MacroActionBarCharDB
+    char.settings = char.settings or {}
+    char.settings[key] = char.settings[key] or {}
+    return char.settings[key]
 end
 
 -- Whether the page also lists the class spells not learned yet, in their sections among the learned ones.
@@ -169,9 +185,6 @@ end
 -- The settings with a default; each spell macro stores one only where it differs from the default.
 local DEFAULTED = { petAttack = true, stopCast = true, startAttack = true }
 
--- The equipment macros' settings, keyed by the macro's slot (see settings).
-local EQUIPMENT_OPTIONS = { equipStopAttack = true, equipStopCast = true }
-
 -- The default of a setting that has one ("petAttack", "stopCast", "startAttack", "autoShotAfter",
 -- "clearDeadBefore" or "targetEnemyBefore"), or nil.
 local function optionDefault(key)
@@ -183,42 +196,18 @@ local function optionDefault(key)
     if key == "targetEnemyBefore" then return smb.targetsEnemyByDefault() end
 end
 
--- The per-character saved data's format, in MacroActionBarCharDB.schema once the character has migrated (the
--- account's settings have their own, see SCHEMA): 2 holds variants instead of per-button copies.
-local CHAR_SCHEMA = 2
-
--- Brings this character's saved data up to CHAR_SCHEMA, once per character. Format 1's per-button copies
--- become variants (see variants): the same numbers, settings and WoW macro names, so the ones on the action
--- bars stay on their slots. The account's record of their numbers moves on the first character to migrate,
--- since it holds every character's.
-local function migrateCharacter()
-    MacroActionBarCharDB = MacroActionBarCharDB or {}
-    local char = MacroActionBarCharDB
-    if (char.schema or 1) >= CHAR_SCHEMA then return end
-    char.variants = char.variants or char.buttonCopies
-    char.buttonCopies = nil
-    local old = MacroActionBarDB and MacroActionBarDB.buttonCopyOwners
-    if old then
-        local owners = settings("variantOwners")
-        for key, owner in pairs(old) do owners[key] = owners[key] or owner end
-        MacroActionBarDB.buttonCopyOwners = nil
-    end
-    char.schema = CHAR_SCHEMA
-end
-
 -- This character's variants of its spells' macros (see smb.newVariant): {[key] = {[n] = true}}, by the
 -- settingKey of the macro each came from. MacroActionBarDB.variantOwners ({["Fireball #2"] = "<realm>-<name>"})
 -- holds every character's, so the numbers, which name the variants' settings and WoW macros, stay unique on
 -- the account.
 local function variants()
-    migrateCharacter()
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
     MacroActionBarCharDB.variants = MacroActionBarCharDB.variants or {}
     return MacroActionBarCharDB.variants
 end
 
 local function variantOwners()
-    migrateCharacter()
-    return settings("variantOwners")
+    return accountSettings("variantOwners")
 end
 
 local function toggleSetting(key, name)
@@ -450,22 +439,23 @@ local function isOldCopyKey(key)
     return false
 end
 
--- Brings the account's saved settings up to SCHEMA, once. From 1, every "mouseover" spell casts on the
--- mouseover, then every "cursor" spell at the cursor, so a spell that had both keeps casting at the cursor, as
--- castBody did; the old sets stay in the saved variables but are no longer read. From 2, the focus copies go:
--- the "focus" set and the copies' own settings (stored under "<spell> @F") are dropped, and so are the
--- modifier picks' focus flags, so a pick casts like its spell's own macro. The spell's own macro keeps casting
--- where it did. From 3, the nearest copies go the same way: a spell that had one casts on the nearest player
--- itself, unless it already cast somewhere other than its target, and the copies' own settings (stored under
--- "<spell> @N") are dropped. Their WoW macros are removed per character (see smb.noteOldNearestCopies). From 4,
--- a modifier pick no longer follows its spell's own Cast On but has its own (see smb.modifierCastOn), so each
--- pick takes the Mouseover, Focus or Cursor its spell had and keeps casting where it did.
+-- Brings the account's saved settings up to SCHEMA, once, before the characters copy them (see
+-- migrateCharacter). From 1, every "mouseover" spell casts on the mouseover, then every "cursor" spell at the
+-- cursor, so a spell that had both keeps casting at the cursor, as castBody did; the old sets stay in the
+-- saved variables but are no longer read. From 2, the focus copies go: the "focus" set and the copies' own
+-- settings (stored under "<spell> @F") are dropped, and so are the modifier picks' focus flags, so a pick
+-- casts like its spell's own macro. The spell's own macro keeps casting where it did. From 3, the nearest
+-- copies go the same way: a spell that had one casts on the nearest player itself, unless it already cast
+-- somewhere other than its target, and the copies' own settings (stored under "<spell> @N") are dropped. Their
+-- WoW macros are removed per character (see smb.noteOldNearestCopies). From 4, a modifier pick no longer
+-- follows its spell's own Cast On but has its own (see smb.modifierCastOn), so each pick takes the Mouseover,
+-- Focus or Cursor its spell had and keeps casting where it did.
 local function migrate()
     MacroActionBarDB = MacroActionBarDB or {}
     local schema = MacroActionBarDB.schema or 1
     if schema >= SCHEMA then return end
     if schema < 2 then
-        local castOn = settings("castOn")
+        local castOn = accountSettings("castOn")
         for _, mode in ipairs({"mouseover", "cursor"}) do
             for key, on in pairs(MacroActionBarDB[mode] or {}) do
                 if on == true then castOn[key] = mode end
@@ -473,7 +463,7 @@ local function migrate()
         end
     end
     if schema < 4 then
-        local castOn = settings("castOn")
+        local castOn = accountSettings("castOn")
         for spell, on in pairs(MacroActionBarDB.nearest or {}) do
             if on == true and castOn[spell] == nil then castOn[spell] = "nearest" end
         end
@@ -488,12 +478,12 @@ local function migrate()
             end
         end
     end
-    for _, spells in pairs(settings("modifiers")) do
+    for _, spells in pairs(accountSettings("modifiers")) do
         spells.shiftFocus, spells.ctrlFocus, spells.altFocus = nil, nil, nil
     end
     if schema < 5 then
-        local castOn = settings("castOn")
-        for _, spells in pairs(settings("modifiers")) do
+        local castOn = accountSettings("castOn")
+        for _, spells in pairs(accountSettings("modifiers")) do
             for _, mod in ipairs(smb.MODIFIERS) do
                 local mode = spells[mod] and castOn[spells[mod]]
                 if spells[mod .. "CastOn"] == "target" then
@@ -505,12 +495,6 @@ local function migrate()
         end
     end
     MacroActionBarDB.schema = SCHEMA
-end
-
--- The "castOn" settings, migrated first.
-local function castOnSettings()
-    migrate()
-    return settings("castOn")
 end
 
 -- Whether a macro offers a "castOn" mode: nil (Target, the plain cast) always, "mouseover" and "focus" when
@@ -531,7 +515,7 @@ end
 -- (see settingKey).
 function smb.castOn(macro)
     if smb.isOptionOn(macro, "pet") then return nil end
-    local mode = castOnSettings()[settingKey(macro)]
+    local mode = settings("castOn")[settingKey(macro)]
     if mode ~= nil and smb.offersCastOn(macro, mode) then return mode end
 end
 
@@ -546,21 +530,21 @@ local RANK_OFFERED = {
 -- The conditional each rank but Normal casts rank 1 under (see castBody).
 local RANK_CONDITION = {raid = "group:raid", combat = "nocombat"}
 
--- The "rank" settings, once the old flags are moved into them, once per account: a "raidRank1" flag becomes
--- rank "raid", and a "combatRank1" flag, which added a copy ("<spell> R1"), rank "combat", the copy going the
--- way of one turned off (see noteRemovedCopy), so the action bars put the spell's own macro in its place.
--- Read lazily, like settings.
-local function rankSettings()
-    local set = settings("rank")
+-- Moves the old rank flags into the account's "rank" settings, once per account, before the characters copy
+-- them (see migrateCharacter): a "raidRank1" flag becomes rank "raid", and a "combatRank1" flag, which added
+-- a copy ("<spell> R1"), rank "combat", the copy going the way of one turned off (see noteRemovedCopy), so
+-- the action bars put the spell's own macro in its place.
+local function migrateRanks()
+    local set = accountSettings("rank")
     if not MacroActionBarDB.rankMigrated then
-        for key, on in pairs(settings("raidRank1")) do
+        for key, on in pairs(accountSettings("raidRank1")) do
             if on == true and set[key] == nil then set[key] = "raid" end
         end
         MacroActionBarDB.raidRank1 = nil
         MacroActionBarDB.rankMigrated = true
     end
     if not MacroActionBarDB.combatRankMigrated then
-        for spell, on in pairs(settings("combatRank1")) do
+        for spell, on in pairs(accountSettings("combatRank1")) do
             if on == true then
                 if set[spell] == nil then set[spell] = "combat" end
                 local copyName = spell:sub(1, MAX_MACRO_NAME - 3) .. " R1"
@@ -570,7 +554,6 @@ local function rankSettings()
         MacroActionBarDB.combatRank1 = nil
         MacroActionBarDB.combatRankMigrated = true
     end
-    return set
 end
 
 -- Whether a macro offers a rank: nil (Normal, the highest rank), "raid" or "combat".
@@ -584,7 +567,7 @@ end
 -- the setting. It doesn't check the sequence, though a sequence can't downrank (see castBody): smb.offersSequence
 -- and the menu may check the rank, so checking the sequence here would loop.
 function smb.rank(macro)
-    local rank = rankSettings()[settingKey(macro, "rank")]
+    local rank = settings("rank")[settingKey(macro, "rank")]
     if rank ~= nil and smb.offersRank(macro, rank) then return rank end
 end
 
@@ -1338,7 +1321,6 @@ local function castBody(macro)
     -- item. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
     -- stealthed (or channelling, or in the form) no clause matches, and a bare #showtooltip would show a question mark
     local spam = smb.isOptionOn(macro, "spam") and macro.spam or nil
-    -- read for every macro, so the old raidRank1 flags are moved over (see rankSettings) before any menu opens
     local rank = smb.rank(macro)
     -- a toggle spell's spam option renames the cast (see smb.castName) rather than adding a condition
     local name = smb.castName(macro)
@@ -1922,7 +1904,7 @@ end
 -- Per-account set of the general macros this addon created, by WoW macro name. Login clears them out of the
 -- General tab (see smb.resetGeneralMacros), so one character's overflow does not clutter the others'.
 local function generalMacros()
-    return settings("generalMacros")
+    return accountSettings("generalMacros")
 end
 
 -- Creates a WoW macro: character specific, or general once those slots are full. Equipment macros are always
@@ -2160,7 +2142,7 @@ end
 -- too, so the page must be rebuilt after.
 function smb.setCastOn(macro, mode)
     if not smb.offersCastOn(macro, mode) then return end
-    castOnSettings()[settingKey(macro)] = mode
+    settings("castOn")[settingKey(macro)] = mode
     rewrite(macro)
 end
 
@@ -2265,7 +2247,7 @@ end
 -- Sets the rank a macro casts (nil for Normal, "raid" or "combat"), then rewrites the macro like smb.toggleOption.
 -- It is stored without checking the sequence (see smb.rank): the menu greys the downranks out while one is on.
 function smb.setRank(macro, rank)
-    rankSettings()[settingKey(macro, "rank")] = rank
+    settings("rank")[settingKey(macro, "rank")] = rank
     rewrite(macro)
 end
 
@@ -2633,3 +2615,59 @@ function smb.removeVariant(variant)
     smb.deleteVariant(variant)
     smb.collectMacros()
 end
+
+-- The per-character saved data's format, in MacroActionBarCharDB.schema once the character has migrated (the
+-- account's settings have their own, see SCHEMA): 2 holds variants instead of per-button copies, 3 its own
+-- spell macros' settings instead of the account's.
+local CHAR_SCHEMA = 3
+
+-- Brings this character's saved data up to CHAR_SCHEMA, once per character. Format 1's per-button copies
+-- become variants (see variants): the same numbers, settings and WoW macro names, so the ones on the action
+-- bars stay on their slots. The account's record of their numbers moves on the first character to migrate,
+-- since it holds every character's. From 2, a character that had played (isNew false) starts with a copy of
+-- the account's spell macro settings, which it used until then, so its macros stay as they were; other
+-- characters' variants are left out. A new character starts with none, so its macros cast on the target.
+local function migrateCharacter(isNew)
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
+    local char = MacroActionBarCharDB
+    local schema = char.schema or 1
+    if schema >= CHAR_SCHEMA then return end
+    if schema < 2 then
+        char.variants = char.variants or char.buttonCopies
+        char.buttonCopies = nil
+        local old = MacroActionBarDB and MacroActionBarDB.buttonCopyOwners
+        if old then
+            local owners = accountSettings("variantOwners")
+            for key, owner in pairs(old) do owners[key] = owners[key] or owner end
+            MacroActionBarDB.buttonCopyOwners = nil
+        end
+    end
+    if not isNew then
+        local owners = accountSettings("variantOwners")
+        local function isMine(key)
+            if owners[key] == nil then return true end -- not a variant
+            local base, n = key:match("^(.*) #(%d+)$")
+            local mine = base and variants()[base]
+            return mine ~= nil and mine[tonumber(n)] == true
+        end
+        for _, setting in ipairs(SPELL_SETTINGS) do
+            local set = settings(setting)
+            for key, value in pairs(MacroActionBarDB[setting] or {}) do
+                if set[key] == nil and isMine(key) then set[key] = copyValue(value) end
+            end
+        end
+    end
+    char.schema = CHAR_SCHEMA
+end
+
+-- Migrates the saved data once it has loaded. A character with no saved data yet is new.
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:SetScript("OnEvent", function(self, _, name)
+    if name ~= addonName then return end
+    self:UnregisterEvent("ADDON_LOADED")
+    local isNew = MacroActionBarCharDB == nil
+    migrate()
+    migrateRanks()
+    migrateCharacter(isNew)
+end)
