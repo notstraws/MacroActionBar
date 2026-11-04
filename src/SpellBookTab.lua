@@ -59,6 +59,9 @@ end
 -- it on the button), or nil to skip the change.
 local COPY_KEYS = {focus = true, enemyPlayer = true, nearest = true, combatRank1 = true}
 
+-- The Rank submenu's choices, in order: smb.rank's values (none for Normal) and their labels.
+local RANKS = {{label = "Normal"}, {rank = "raid", label = "Downrank In Raids"}}
+
 function smb.showMacroMenu(owner, macro, onChange, actionSlot, prepare)
     if not smb.hasOptions(macro) then return end
     -- every change starts here; false skips it. The menu's getters read macro, so they follow the swap
@@ -121,6 +124,9 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, prepare)
             local picked = smb.sequenceSpells(macro)
             local submenu = rootDescription:CreateButton("Sequence: "
                 .. (#picked > 0 and (#picked + 1) .. " spells" or "None"))
+            -- a sequence can't downrank (see castBody in Macros.lua), so it is greyed out while Downrank In
+            -- Raids is on, unless one is already set and needs clearing
+            submenu:SetEnabled(function() return smb.rank(macro) ~= "raid" or smb.hasSequenceOn(macro) end)
             submenu:CreateTitle("Cast In Sequence (resets after 2 sec)")
             submenu:CreateButton("Clear", function()
                 if not beforeChange() then return end
@@ -218,9 +224,29 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, prepare)
             addCastOn()
             if macro.petAbility then addOption("Cast " .. macro.petAbility .. " If Summoned", "pet") end
         end
+        -- the Rank submenu, for the class config's raidRank1 spells: one radio per rank the macro offers
         if macro.raidRank1 then
-            -- a sequence can't downrank (see castBody in Macros.lua)
-            addOption("Downrank In Raids", "raidRank1"):SetEnabled(function() return not smb.hasSequenceOn(macro) end)
+            local current = "Normal"
+            for _, choice in ipairs(RANKS) do
+                if choice.rank == smb.rank(macro) then current = choice.label end
+            end
+            local submenu = rootDescription:CreateButton("Rank: " .. current)
+            submenu:CreateTitle("Rank")
+            for _, choice in ipairs(RANKS) do
+                if smb.offersRank(macro, choice.rank) then
+                    local radio = submenu:CreateRadio(choice.label,
+                        function() return smb.rank(macro) == choice.rank end,
+                        function()
+                            if not beforeChange() then return end
+                            smb.setRank(macro, choice.rank)
+                            onChange() -- rewrites the macro and its subtext
+                        end)
+                    -- a sequence can't downrank (see castBody in Macros.lua)
+                    if choice.rank == "raid" then
+                        radio:SetEnabled(function() return not smb.hasSequenceOn(macro) end)
+                    end
+                end
+            end
         end
         -- "Don't Toggle Off On Recast" (Auto Shot) sits below Cast On Nearest Player instead
         local noToggle = macro.spam and macro.spam:match("^[^:]+") == "!"
@@ -742,7 +768,7 @@ function setMacro(button, macro, bars)
     elseif smb.isLineOn(macro, "petAttack", "before") or smb.isLineOn(macro, "petAttack", "after") then
         button.subText:SetText("Pet attack")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif smb.isOptionOn(macro, "raidRank1") then
+    elseif smb.rank(macro) == "raid" then
         button.subText:SetText("Raid R1")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.isOptionOn(macro, "spam") then

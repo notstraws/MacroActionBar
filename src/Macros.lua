@@ -29,7 +29,7 @@ end
 -- copy of a dispels spell's macro that casts on the nearest enemy player), "nearest" (the page also lists
 -- a copy of a buffs spell's macro that casts on the nearest friendly player), "combatRank1" (the page also
 -- lists a copy of a combatRank1 spell's macro that casts rank 1 out of combat), "pet" (a summon macro casts the
--- pet's ability while that pet is out), "raidRank1" (the macro casts rank 1 in a raid group), "spam"
+-- pet's ability while that pet is out), "spam"
 -- (the macro does nothing while its channelled spell is channelling, its stealth spell is on, or you are in
 -- its shapeshift form, and casts a toggle spell as "!<spell>" so it doesn't toggle off), "petAttack" (the macro also sends
 -- the pet to attack before the cast), "stopCast" (the macro stops the current cast first) or "startAttack" (the macro
@@ -42,7 +42,8 @@ end
 -- (offered with startAttack). "cancelIceBlockBefore" adds /cancelaura Ice Block before the cast (see
 -- smb.offersCancelIceBlock). "clearDeadBefore" adds /cleartarget [dead] and "targetEnemyBefore" /targetenemy
 -- [noharm][dead] before the cast (see smb.offersRetarget); true or false overrides their defaults (clearDeadDefault,
--- targetEnemyDefault), nil follows them. "useItems" and "useItemsAfter" hold a list of equipment
+-- targetEnemyDefault), nil follows them. "rank" holds a rank instead of a flag: "raid" (the macro casts rank 1 in a
+-- raid group, see smb.rank) or nil (its highest rank); an old "raidRank1" flag becomes "raid". "useItems" and "useItemsAfter" hold a list of equipment
 -- slots instead of a flag: the macro uses each slot's item, in that order, before (or after) the cast. "racials" and
 -- "racialsAfter" hold a set of racial and offGcd spell names: the macro casts each one before (or after) the cast. "order" and
 -- "orderAfter" hold the order the player ticked a side's lines in, as a list of ids ("stopCast", "startAttack",
@@ -349,7 +350,7 @@ function smb.classOffersAutoShot()
     return autoShot ~= nil and not autoShot.unlearned
 end
 
--- Whether a macro offers an option ("focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam",
+-- Whether a macro offers an option ("focus", "enemyPlayer", "nearest", "combatRank1", "pet", "spam",
 -- "petAttack", "stopCast" or "startAttack", or an equipment macro's "equipStopAttack" or "equipStopCast") and
 -- the player turned it on.
 function smb.isOptionOn(macro, key)
@@ -379,8 +380,6 @@ function smb.isOptionOn(macro, key)
         offered = macro.combatRank1
     elseif key == "pet" then
         offered = macro.petAbility ~= nil
-    elseif key == "raidRank1" then
-        offered = macro.raidRank1
     elseif key == "spam" then
         offered = macro.spam ~= nil
     else
@@ -433,6 +432,42 @@ function smb.castOn(macro)
     if smb.isOptionOn(macro, "pet") then return nil end
     local mode = castOnSettings()[settingKey(macro)]
     if mode ~= nil and smb.offersCastOn(macro, mode) then return mode end
+end
+
+-- Whether a spell macro offers each rank but Normal (nil), which every one does: "raid" casts rank 1 in a
+-- raid group, for the class config's raidRank1 spells (a combat rank copy has none). A later rank adds its
+-- own line here.
+local RANK_OFFERED = {
+    raid = function(macro) return macro.raidRank1 end,
+}
+
+-- The "rank" settings, once the old "raidRank1" flags are moved into them: once per account, a flag becomes
+-- rank "raid". Read lazily, like settings.
+local function rankSettings()
+    local set = settings("rank")
+    if not MacroSpellbookDB.rankMigrated then
+        for key, on in pairs(settings("raidRank1")) do
+            if on == true and set[key] == nil then set[key] = "raid" end
+        end
+        MacroSpellbookDB.raidRank1 = nil
+        MacroSpellbookDB.rankMigrated = true
+    end
+    return set
+end
+
+-- Whether a macro offers a rank: nil (Normal, the highest rank) or "raid".
+function smb.offersRank(macro, rank)
+    if rank == nil then return true end
+    local offered = RANK_OFFERED[rank]
+    return offered ~= nil and offered(macro) == true
+end
+
+-- The rank a macro casts: nil (Normal) or "raid". A stored rank it doesn't offer reads as Normal, keeping
+-- the setting. It doesn't check the sequence, though a sequence can't downrank (see castBody): smb.offersSequence
+-- and the menu may check the rank, so checking the sequence here would loop.
+function smb.rank(macro)
+    local rank = rankSettings()[settingKey(macro, "rank")]
+    if rank ~= nil and smb.offersRank(macro, rank) then return rank end
 end
 
 -- The side of the cast the stopCast, startAttack and petAttack settings themselves (with their defaults) put
@@ -1170,6 +1205,8 @@ local function castBody(macro)
     -- item. It names the spell with spam on too, unless modifier or form clauses pick the icon: while
     -- stealthed (or channelling, or in the form) no clause matches, and a bare #showtooltip would show a question mark
     local spam = smb.isOptionOn(macro, "spam") and macro.spam or nil
+    -- read for every macro, so the old raidRank1 flags are moved over (see rankSettings) before any menu opens
+    local rank = smb.rank(macro)
     -- a toggle spell's spam option renames the cast (see smb.castName) rather than adding a condition
     local name = smb.castName(macro)
     local noToggle = spam == NO_TOGGLE
@@ -1213,7 +1250,7 @@ local function castBody(macro)
         return header .. rank1Cast(name, targets, spam, "", "nocombat")
     end
     -- a sequence can't downrank: a rank 1 clause per target would repeat every step
-    if smb.isOptionOn(macro, "raidRank1") and not steps then
+    if rank == "raid" and not steps then
         local targets = {""}
         if macro.nearest then
             targets = {"help,nodead", "@player"}
@@ -1221,6 +1258,8 @@ local function castBody(macro)
             targets = {"harm,nodead"}
         elseif macro.focus then
             targets = {"@focus," .. macro.target .. ",nodead", ""}
+        elseif castOn == "cursor" then
+            targets = {"@cursor"}
         elseif castOn == "mouseover" then
             targets = {"@mouseover," .. macro.target .. ",nodead", ""}
         end
@@ -1998,7 +2037,7 @@ function smb.isOnActionBars(macro, bars)
     return smb.countsSpellsOnBars() or macro.body == bareBody(macro.name)
 end
 
--- Flips a setting ("focus", "enemyPlayer", "nearest", "combatRank1", "pet","raidRank1", "spam", "petAttack",
+-- Flips a setting ("focus", "enemyPlayer", "nearest", "combatRank1", "pet", "spam", "petAttack",
 -- "stopCast" or "startAttack", or "equipStopAttack" or "equipStopCast" on an equipment macro) and rewrites
 -- the macro if it already exists. In combat the rewrite waits until the next pickup. The focus, enemyPlayer, nearest and combatRank1 settings add or remove a page entry, so the page must be rebuilt after any of them. Turning focus off also clears
 -- the modifier picks that cast the spell on the focus target.
@@ -2168,6 +2207,13 @@ function smb.setFollowUpSpell(macro, name)
     rewrite(macro)
 end
 
+-- Sets the rank a macro casts (nil for Normal, or "raid"), then rewrites the macro like smb.toggleOption.
+-- It is stored without checking the sequence (see smb.rank): the menu greys Downrank In Raids out while one is on.
+function smb.setRank(macro, rank)
+    rankSettings()[settingKey(macro, "rank")] = rank
+    rewrite(macro)
+end
+
 -- Removes every spell from a macro's sequence, then rewrites the macro like smb.toggleOption.
 function smb.clearSequence(macro)
     settings("sequence")[settingKey(macro)] = nil
@@ -2176,7 +2222,7 @@ end
 
 -- The settings a spell macro stores under its settingKey, and an equipment macro under its slot.
 local SPELL_SETTINGS = {
-    "castOn", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "raidRank1", "spam",
+    "castOn", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "rank", "spam",
     "petAttack", "stopCast", "startAttack", "startAttackBefore", "petAttackAfter", "autoShotBefore",
     "autoShotAfter", "petFollowBefore", "petFollowAfter",
     "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "clearDeadBefore", "targetEnemyBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
