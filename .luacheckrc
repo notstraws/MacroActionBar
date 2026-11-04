@@ -8,8 +8,8 @@ ignore = {
 }
 
 globals = {
-	"MacroSpellbookDB",
-	"MacroSpellbookCharDB",
+	"MacroActionBarDB",
+	"MacroActionBarCharDB",
 }
 
 read_globals = {

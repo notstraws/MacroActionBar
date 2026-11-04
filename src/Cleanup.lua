@@ -8,11 +8,11 @@ local addonName, smb = ...
 local popup
 
 local function hidesPopup()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.hideMacrosFullPopup == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.hideMacrosFullPopup == true
 end
 
 local function buildPopup()
-    local frame = CreateFrame("Frame", "MacroSpellbookMacrosFullPopup", UIParent, "BackdropTemplate")
+    local frame = CreateFrame("Frame", "MacroActionBarMacrosFullPopup", UIParent, "BackdropTemplate")
     frame:SetSize(340, 130)
     frame:SetPoint("TOP", 0, -135)
     frame:SetFrameStrata("DIALOG")
@@ -34,8 +34,8 @@ local function buildPopup()
     check:SetSize(24, 24)
     check:SetPoint("BOTTOMLEFT", 20, 44)
     check:SetScript("OnClick", function(self)
-        MacroSpellbookDB = MacroSpellbookDB or {}
-        MacroSpellbookDB.hideMacrosFullPopup = self:GetChecked() or nil
+        MacroActionBarDB = MacroActionBarDB or {}
+        MacroActionBarDB.hideMacrosFullPopup = self:GetChecked() or nil
     end)
     local label = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     label:SetPoint("LEFT", check, "RIGHT", 2, 0)
@@ -102,7 +102,7 @@ local function restore()
     if not outOfCombat(restore) then return end
     tries = tries + 1
     if smb.restoreGeneralMacroSlots() or tries >= RESTORE_TRIES then
-        MacroSpellbookCharDB.restorePending = nil
+        MacroActionBarCharDB.restorePending = nil
         startRecording() -- the bars are this session's now
     else
         C_Timer.After(RESTORE_DELAY, restore)
@@ -129,13 +129,13 @@ frame:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadingUi)
         -- the flag stays saved until the macros are back on the bars, so a /reload before then (in combat, or
         -- during the retries) runs the cleanup again instead of recording the bars without them. It is not
         -- checked for a full tab again: the cleanup's deletes have already freed slots.
-        MacroSpellbookCharDB = MacroSpellbookCharDB or {}
-        if MacroSpellbookCharDB.restorePending then
+        MacroActionBarCharDB = MacroActionBarCharDB or {}
+        if MacroActionBarCharDB.restorePending then
             C_Timer.After(0, reset)
         elseif isInitialLogin and not isReloadingUi then
             C_Timer.After(0, function() -- once the macros and action bars have loaded
                 if smb.isGeneralFull() then
-                    MacroSpellbookCharDB.restorePending = true
+                    MacroActionBarCharDB.restorePending = true
                     reset()
                 else
                     startRecording() -- room left: nothing to clean

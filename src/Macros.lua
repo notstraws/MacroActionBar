@@ -48,7 +48,9 @@ end
 -- for that slot starts with /stopattack (or /stopcasting) before using the item. "modifiers" holds a table
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held
 -- (see smb.modifierSpell), or uses the item in
--- equipment slot shiftSlot (ctrlSlot, altSlot) instead (see smb.modifierSlot). "sequence" holds a
+-- equipment slot shiftSlot (ctrlSlot, altSlot) instead (see smb.modifierSlot). shiftCastOn (ctrlCastOn,
+-- altCastOn) sets where that key's spell is cast: "mouseover", "focus" or "cursor", or the target when unset (see
+-- smb.modifierCastOn). "sequence" holds a
 -- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "followUp"
 -- holds a cooldown spell's one spell name: the macro casts it on the same press, after its own. "forms"
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
@@ -57,100 +59,100 @@ end
 -- variant under the key of the macro it came from plus " #<n>", e.g. "Fireball #2" (see variants).
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
 local function settings(key)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB[key] = MacroSpellbookDB[key] or {}
-    return MacroSpellbookDB[key]
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB[key] = MacroActionBarDB[key] or {}
+    return MacroActionBarDB[key]
 end
 
 -- Whether the page also lists the class spells not learned yet, in their sections among the learned ones.
 function smb.showsUnlearned()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.showUnlearned == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.showUnlearned == true
 end
 
 function smb.setShowUnlearned(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.showUnlearned = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.showUnlearned = on or nil
 end
 
 -- Whether a plain spell on an action bar counts as its macro being placed even when the macro has options
 -- on (see smb.isOnActionBars). Macros with no options on always count it.
 function smb.countsSpellsOnBars()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.countSpellsOnBars == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.countSpellsOnBars == true
 end
 
 function smb.setCountSpellsOnBars(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.countSpellsOnBars = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.countSpellsOnBars = on or nil
 end
 
--- Whether opening the spellbook shows the Macro Spellbook page instead of the native spell page.
+-- Whether opening the spellbook shows the Macro Action Bar page instead of the native spell page.
 function smb.opensOnSpellbook()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.openOnSpellbook == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.openOnSpellbook == true
 end
 
 function smb.setOpensOnSpellbook(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.openOnSpellbook = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.openOnSpellbook = on or nil
 end
 
 -- Whether "petAttack" is on for every enemy spell macro that has no setting of its own.
 function smb.petAttacksByDefault()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.petAttackDefault == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.petAttackDefault == true
 end
 
 function smb.setPetAttacksByDefault(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.petAttackDefault = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.petAttackDefault = on or nil
 end
 
 -- Whether "stopCast" is on for every spell macro that has no setting of its own.
 function smb.stopsCastingByDefault()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.stopCastDefault == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.stopCastDefault == true
 end
 
 function smb.setStopsCastingByDefault(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.stopCastDefault = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.stopCastDefault = on or nil
 end
 
 -- Whether "startAttack" is on for every spell macro that has no setting of its own.
 function smb.startsAttackByDefault()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.startAttackDefault == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.startAttackDefault == true
 end
 
 function smb.setStartsAttackByDefault(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.startAttackDefault = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.startAttackDefault = on or nil
 end
 
 -- Whether "autoShotAfter" is on for every spell macro that has no setting of its own.
 function smb.autoShotsByDefault()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.autoShotDefault == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.autoShotDefault == true
 end
 
 function smb.setAutoShotsByDefault(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.autoShotDefault = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.autoShotDefault = on or nil
 end
 
 -- Whether "clearDeadBefore" is on for every enemy spell macro that has no setting of its own.
 function smb.clearsDeadByDefault()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.clearDeadDefault == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.clearDeadDefault == true
 end
 
 function smb.setClearsDeadByDefault(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.clearDeadDefault = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.clearDeadDefault = on or nil
 end
 
 -- Whether "targetEnemyBefore" is on for every enemy spell macro that has no setting of its own.
 function smb.targetsEnemyByDefault()
-    return MacroSpellbookDB ~= nil and MacroSpellbookDB.targetEnemyDefault == true
+    return MacroActionBarDB ~= nil and MacroActionBarDB.targetEnemyDefault == true
 end
 
 function smb.setTargetsEnemyByDefault(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.targetEnemyDefault = on or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.targetEnemyDefault = on or nil
 end
 
 -- The settings with a default; each spell macro stores one only where it differs from the default.
@@ -170,7 +172,7 @@ local function optionDefault(key)
     if key == "targetEnemyBefore" then return smb.targetsEnemyByDefault() end
 end
 
--- The per-character saved data's format, in MacroSpellbookCharDB.schema once the character has migrated (the
+-- The per-character saved data's format, in MacroActionBarCharDB.schema once the character has migrated (the
 -- account's settings have their own, see SCHEMA): 2 holds variants instead of per-button copies.
 local CHAR_SCHEMA = 2
 
@@ -179,28 +181,28 @@ local CHAR_SCHEMA = 2
 -- bars stay on their slots. The account's record of their numbers moves on the first character to migrate,
 -- since it holds every character's.
 local function migrateCharacter()
-    MacroSpellbookCharDB = MacroSpellbookCharDB or {}
-    local char = MacroSpellbookCharDB
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
+    local char = MacroActionBarCharDB
     if (char.schema or 1) >= CHAR_SCHEMA then return end
     char.variants = char.variants or char.buttonCopies
     char.buttonCopies = nil
-    local old = MacroSpellbookDB and MacroSpellbookDB.buttonCopyOwners
+    local old = MacroActionBarDB and MacroActionBarDB.buttonCopyOwners
     if old then
         local owners = settings("variantOwners")
         for key, owner in pairs(old) do owners[key] = owners[key] or owner end
-        MacroSpellbookDB.buttonCopyOwners = nil
+        MacroActionBarDB.buttonCopyOwners = nil
     end
     char.schema = CHAR_SCHEMA
 end
 
 -- This character's variants of its spells' macros (see smb.newVariant): {[key] = {[n] = true}}, by the
--- settingKey of the macro each came from. MacroSpellbookDB.variantOwners ({["Fireball #2"] = "<realm>-<name>"})
+-- settingKey of the macro each came from. MacroActionBarDB.variantOwners ({["Fireball #2"] = "<realm>-<name>"})
 -- holds every character's, so the numbers, which name the variants' settings and WoW macros, stay unique on
 -- the account.
 local function variants()
     migrateCharacter()
-    MacroSpellbookCharDB.variants = MacroSpellbookCharDB.variants or {}
-    return MacroSpellbookCharDB.variants
+    MacroActionBarCharDB.variants = MacroActionBarCharDB.variants or {}
+    return MacroActionBarCharDB.variants
 end
 
 local function variantOwners()
@@ -423,7 +425,7 @@ local removedCopies = {} -- the WoW macro names of copies turned off since smb.t
 -- The saved settings' format: 2 stores where a macro casts as one "castOn" setting instead of the old
 -- "mouseover" and "cursor" flags; 3 casts on the focus target as a "castOn" mode instead of a focus copy; 4
 -- casts on the nearest friendly player as a "castOn" mode instead of a nearest copy.
-local SCHEMA = 4
+local SCHEMA = 5
 
 -- The settings keys of the old copies migrate drops: focus copies ("<spell> @F") and nearest copies
 -- ("<spell> @N"), with their variants ("<spell> @N #2").
@@ -444,29 +446,31 @@ end
 -- modifier picks' focus flags, so a pick casts like its spell's own macro. The spell's own macro keeps casting
 -- where it did. From 3, the nearest copies go the same way: a spell that had one casts on the nearest player
 -- itself, unless it already cast somewhere other than its target, and the copies' own settings (stored under
--- "<spell> @N") are dropped. Their WoW macros are removed per character (see smb.noteOldNearestCopies).
+-- "<spell> @N") are dropped. Their WoW macros are removed per character (see smb.noteOldNearestCopies). From 4,
+-- a modifier pick no longer follows its spell's own Cast On but has its own (see smb.modifierCastOn), so each
+-- pick takes the Mouseover, Focus or Cursor its spell had and keeps casting where it did.
 local function migrate()
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    local schema = MacroSpellbookDB.schema or 1
+    MacroActionBarDB = MacroActionBarDB or {}
+    local schema = MacroActionBarDB.schema or 1
     if schema >= SCHEMA then return end
     if schema < 2 then
         local castOn = settings("castOn")
         for _, mode in ipairs({"mouseover", "cursor"}) do
-            for key, on in pairs(MacroSpellbookDB[mode] or {}) do
+            for key, on in pairs(MacroActionBarDB[mode] or {}) do
                 if on == true then castOn[key] = mode end
             end
         end
     end
     if schema < 4 then
         local castOn = settings("castOn")
-        for spell, on in pairs(MacroSpellbookDB.nearest or {}) do
+        for spell, on in pairs(MacroActionBarDB.nearest or {}) do
             if on == true and castOn[spell] == nil then castOn[spell] = "nearest" end
         end
     end
-    MacroSpellbookDB.focus = nil
-    MacroSpellbookDB.nearest = nil
+    MacroActionBarDB.focus = nil
+    MacroActionBarDB.nearest = nil
     -- generalMacros is keyed by WoW macro name, and keeps the copies' so login still clears them out
-    for name, set in pairs(MacroSpellbookDB) do
+    for name, set in pairs(MacroActionBarDB) do
         if type(set) == "table" and name ~= "generalMacros" then
             for key in pairs(set) do
                 if isOldCopyKey(key) then set[key] = nil end
@@ -476,7 +480,20 @@ local function migrate()
     for _, spells in pairs(settings("modifiers")) do
         spells.shiftFocus, spells.ctrlFocus, spells.altFocus = nil, nil, nil
     end
-    MacroSpellbookDB.schema = SCHEMA
+    if schema < 5 then
+        local castOn = settings("castOn")
+        for _, spells in pairs(settings("modifiers")) do
+            for _, mod in ipairs(smb.MODIFIERS) do
+                local mode = spells[mod] and castOn[spells[mod]]
+                if spells[mod .. "CastOn"] == "target" then
+                    spells[mod .. "CastOn"] = nil
+                elseif spells[mod .. "CastOn"] == nil and mode ~= "nearest" then
+                    spells[mod .. "CastOn"] = mode
+                end
+            end
+        end
+    end
+    MacroActionBarDB.schema = SCHEMA
 end
 
 -- The "castOn" settings, migrated first.
@@ -524,14 +541,14 @@ local RANK_CONDITION = {raid = "group:raid", combat = "nocombat"}
 -- Read lazily, like settings.
 local function rankSettings()
     local set = settings("rank")
-    if not MacroSpellbookDB.rankMigrated then
+    if not MacroActionBarDB.rankMigrated then
         for key, on in pairs(settings("raidRank1")) do
             if on == true and set[key] == nil then set[key] = "raid" end
         end
-        MacroSpellbookDB.raidRank1 = nil
-        MacroSpellbookDB.rankMigrated = true
+        MacroActionBarDB.raidRank1 = nil
+        MacroActionBarDB.rankMigrated = true
     end
-    if not MacroSpellbookDB.combatRankMigrated then
+    if not MacroActionBarDB.combatRankMigrated then
         for spell, on in pairs(settings("combatRank1")) do
             if on == true then
                 if set[spell] == nil then set[spell] = "combat" end
@@ -539,8 +556,8 @@ local function rankSettings()
                 removedCopies[#removedCopies + 1] = {macroName = copyName, spell = spell, copy = {}}
             end
         end
-        MacroSpellbookDB.combatRank1 = nil
-        MacroSpellbookDB.combatRankMigrated = true
+        MacroActionBarDB.combatRank1 = nil
+        MacroActionBarDB.combatRankMigrated = true
     end
     return set
 end
@@ -797,6 +814,14 @@ function smb.modifierSlot(macro, mod)
     return spells and spells[mod .. "Slot"]
 end
 
+-- Where a macro casts the spell set for a modifier key: "mouseover", "focus" or "cursor", or nil on the target.
+function smb.modifierCastOn(macro, mod)
+    if not smb.offersModifiers(macro) then return nil end
+    migrate()
+    local spells = settings("modifiers")[settingKey(macro)]
+    return spells and spells[mod .. "CastOn"]
+end
+
 -- Whether a macro has a spell or an equipment slot set for any modifier key.
 function smb.hasModifierOn(macro)
     for _, mod in ipairs(smb.MODIFIERS) do
@@ -1006,11 +1031,15 @@ smb.macroByMacroName = {}
 -- spell cast on the nearest player is cast on the target: targeting the nearest player takes lines of its own. With
 -- noToggle, a toggle spell, such as an aspect, is always cast as "!<spell>", whatever its own page macro's
 -- spam option. With no condition (nil), the clause has none of its own, e.g. "[@cursor] Blizzard; ", or
--- "Fireball; " for a plain cast.
-local function targetedClause(condition, other, noToggle)
+-- "Fireball; " for a plain cast. castOn ("target", "mouseover", "focus" or "cursor") casts it there instead.
+local function targetedClause(condition, other, noToggle, castOn)
     local name = noToggle and other.spam == NO_TOGGLE and NO_TOGGLE .. other.name or smb.castName(other)
     local conditional = condition and "[" .. condition .. "]" or ""
-    local castOn = smb.castOn(other)
+    if castOn == nil then
+        castOn = smb.castOn(other)
+    elseif castOn == "target" then
+        castOn = nil
+    end
     if castOn == "cursor" then
         conditional = cond(nil, condition, "@cursor")
     elseif castOn == "mouseover" or castOn == "focus" then
@@ -1020,7 +1049,7 @@ local function targetedClause(condition, other, noToggle)
 end
 
 -- The line casting a cooldown macro's follow-up spell (see smb.offersFollowUp), starting with a newline, the
--- way that spell's own page macro targets, like a modifier spell; "" when it has none.
+-- way that spell's own page macro targets (see targetedClause); "" when it has none.
 local function followUpLine(macro)
     local other = followUpMacro(macro)
     if not other then return "" end
@@ -1028,8 +1057,8 @@ local function followUpLine(macro)
 end
 
 -- The clauses that cast a macro's modifier spells, each followed by "; ", ready to go before its own, e.g.
--- "[mod:shift] Fear; [mod:alt,@mouseover,help,nodead][mod:alt] Flash Heal; ", or "". Each spell is cast the
--- way its own page macro targets: at the mouseover, the focus or the cursor when that option is on there. A
+-- "[mod:shift] Fear; [mod:alt,@mouseover,help,nodead][mod:alt] Flash Heal; ", or "". Each spell is cast where
+-- that key's Cast On says (see smb.modifierCastOn), on the target by default. A
 -- toggle spell, such as an aspect, is always cast as "!<spell>", so holding the key and pressing again never
 -- toggles it off. A spell that isn't learned is left out, keeping its setting. An equipment pick uses whatever
 -- is in its slot, e.g. "[mod:ctrl] 13; ", like the useItems lines.
@@ -1041,7 +1070,10 @@ local function modifierClauses(macro)
         if slot then
             clauses[#clauses + 1] = "[mod:" .. mod .. "] " .. slot .. "; "
         elseif other and not other.unlearned then
-            clauses[#clauses + 1] = targetedClause("mod:" .. mod, other, true)
+            -- on the target unless the pick's Cast On is one the spell offers
+            local castOn = smb.modifierCastOn(macro, mod)
+            if not (castOn and smb.offersCastOn(other, castOn)) then castOn = "target" end
+            clauses[#clauses + 1] = targetedClause("mod:" .. mod, other, true, castOn)
         end
     end
     return table.concat(clauses)
@@ -1110,7 +1142,7 @@ end
 
 -- The clauses that cast a macro's form spells, each followed by "; ", ready to go after its modifier
 -- clauses, e.g. "[form:3] Shred; [form:1,@mouseover,harm,nodead][form:1] Faerie Fire (Feral); ", or "". Each
--- spell is cast the way its own page macro targets, like a modifier spell.
+-- spell is cast the way its own page macro targets, like a follow-up spell.
 local function formClauses(macro)
     local clauses = {}
     for _, pick in ipairs(formPicks(macro)) do clauses[#clauses + 1] = targetedClause(pick[1], pick[2]) end
@@ -1954,7 +1986,7 @@ local function ensureMacros()
 end
 
 -- Saves which of the addon's general macros are on this character's action bars, and where, to
--- MacroSpellbookCharDB.generalMacros ({[name] = {icon, body, equipment, slots}}), so smb.resetGeneralMacros
+-- MacroActionBarCharDB.generalMacros ({[name] = {icon, body, equipment, slots}}), so smb.resetGeneralMacros
 -- can put them back at the next login. Run while playing, whenever the bars or macros change: by logout the
 -- action bars may already be gone.
 function smb.recordGeneralMacros()
@@ -1976,8 +2008,8 @@ function smb.recordGeneralMacros()
             end
         end
     end
-    MacroSpellbookCharDB = MacroSpellbookCharDB or {}
-    MacroSpellbookCharDB.generalMacros = recorded
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
+    MacroActionBarCharDB.generalMacros = recorded
 end
 
 -- The name of the macro in an action slot, or nil when the slot holds no macro (or one that no longer exists).
@@ -2001,7 +2033,7 @@ function smb.resetGeneralMacros()
     end
     wipe(generalMacros())
 
-    local recorded = MacroSpellbookCharDB and MacroSpellbookCharDB.generalMacros or {}
+    local recorded = MacroActionBarCharDB and MacroActionBarCharDB.generalMacros or {}
     local full, fullEquipment = false, false
     for name, saved in pairs(recorded) do
         if GetMacroIndexByName(name) == 0 and not createMacro(name, saved.icon, saved.body, saved.equipment) then
@@ -2016,7 +2048,7 @@ end
 -- be ready to pick up yet, so this is retried until it returns true: every slot holds its macro (or can't).
 function smb.restoreGeneralMacroSlots()
     if InCombatLockdown() then return false end
-    local recorded = MacroSpellbookCharDB and MacroSpellbookCharDB.generalMacros or {}
+    local recorded = MacroActionBarCharDB and MacroActionBarCharDB.generalMacros or {}
     local done = true
     for name, saved in pairs(recorded) do
         local index = GetMacroIndexByName(name)
@@ -2146,12 +2178,13 @@ function smb.toggleRacial(macro, racial, side)
 end
 
 -- Sets the spell a macro casts while a modifier key ("shift", "ctrl" or "alt") is held, or clears it with
--- nil, then rewrites the macro like smb.toggleOption.
-function smb.setModifierSpell(macro, mod, name)
+-- nil, then rewrites the macro like smb.toggleOption. castOn ("mouseover", "focus" or "cursor", or nil for the
+-- target) sets where it is cast (see smb.modifierCastOn).
+function smb.setModifierSpell(macro, mod, name, castOn)
     local set = settings("modifiers")
     local spells = set[settingKey(macro)] or {}
-    spells[mod] = name
-    spells[mod .. "Slot"] = nil
+    spells[mod], spells[mod .. "Slot"] = name, nil
+    spells[mod .. "CastOn"] = name and castOn or nil
     set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end
@@ -2161,7 +2194,7 @@ end
 function smb.setModifierSlot(macro, mod, slot)
     local set = settings("modifiers")
     local spells = set[settingKey(macro)] or {}
-    spells[mod], spells[mod .. "Slot"] = nil, slot
+    spells[mod], spells[mod .. "Slot"], spells[mod .. "CastOn"] = nil, slot, nil
     set[settingKey(macro)] = next(spells) and spells or nil
     rewrite(macro)
 end
@@ -2350,10 +2383,10 @@ end
 -- character ones alike: their names may have been cut to settle a clash. Needs the macros loaded and
 -- smb.macros built.
 function smb.noteOldNearestCopies()
-    MacroSpellbookCharDB = MacroSpellbookCharDB or {}
-    if MacroSpellbookCharDB.nearestCopiesRemoved then return end
+    MacroActionBarCharDB = MacroActionBarCharDB or {}
+    if MacroActionBarCharDB.nearestCopiesRemoved then return end
     for key in pairs(variants()) do
-        if isOldCopyKey(key) then MacroSpellbookCharDB.variants[key] = nil end
+        if isOldCopyKey(key) then MacroActionBarCharDB.variants[key] = nil end
     end
     local numAccount, numCharacter = GetNumMacros()
     local indexes = {}
@@ -2371,7 +2404,7 @@ function smb.noteOldNearestCopies()
             removedCopies[#removedCopies + 1] = {macroName = name, spell = oldNearestSpell(prefix, limit), copy = {}}
         end
     end
-    MacroSpellbookCharDB.nearestCopiesRemoved = true
+    MacroActionBarCharDB.nearestCopiesRemoved = true
 end
 
 -- Whether copies were turned off since the last smb.takeRemovedCopies.

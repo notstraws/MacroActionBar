@@ -1,6 +1,6 @@
 local addonName, smb = ...
 
--- A minimap button that opens the Macro Spellbook page (SpellBookTab.lua), and the addon's page under
+-- A minimap button that opens the Macro Action Bar page (SpellBookTab.lua), and the addon's page under
 -- Options > AddOns, which turns the button on and off. Both settings are account-wide.
 
 local DEFAULT_ANGLE = 225 -- degrees around the minimap, counterclockwise from the right: bottom left
@@ -9,17 +9,17 @@ local button
 
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
 function smb.minimapIconShown()
-    return MacroSpellbookDB == nil or MacroSpellbookDB.minimapHide ~= true
+    return MacroActionBarDB == nil or MacroActionBarDB.minimapHide ~= true
 end
 
 function smb.setMinimapIconShown(on)
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.minimapHide = (not on) or nil
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.minimapHide = (not on) or nil
     if button then button:SetShown(on) end
 end
 
 local function angle()
-    return MacroSpellbookDB and MacroSpellbookDB.minimapAngle or DEFAULT_ANGLE
+    return MacroActionBarDB and MacroActionBarDB.minimapAngle or DEFAULT_ANGLE
 end
 
 local function updatePosition()
@@ -34,14 +34,14 @@ local function onDragUpdate()
     local x, y = GetCursorPosition()
     local scale = Minimap:GetEffectiveScale()
     local centerX, centerY = Minimap:GetCenter()
-    MacroSpellbookDB = MacroSpellbookDB or {}
-    MacroSpellbookDB.minimapAngle = math.deg(math.atan2(y / scale - centerY, x / scale - centerX)) % 360
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.minimapAngle = math.deg(math.atan2(y / scale - centerY, x / scale - centerX)) % 360
     updatePosition()
 end
 
 local function showTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:SetText("Macro Spellbook")
+    GameTooltip:SetText("Macro Action Bar")
     GameTooltip:AddLine("Left-click: Open", 1, 1, 1)
     GameTooltip:AddLine("Right-click: Options", 1, 1, 1)
     GameTooltip:Show()
@@ -52,7 +52,7 @@ local function hideTooltip(self)
 end
 
 local function createButton()
-    button = CreateFrame("Button", "MacroSpellbookMinimapButton", Minimap)
+    button = CreateFrame("Button", "MacroActionBarMinimapButton", Minimap)
     button:SetSize(31, 31)
     button:SetFrameStrata("MEDIUM")
     button:SetFrameLevel(8)
@@ -80,10 +80,10 @@ local function createButton()
         if mouseButton == "RightButton" then
             hideTooltip(self)
             MenuUtil.CreateContextMenu(self, function(_, rootDescription)
-                rootDescription:CreateTitle("Macro Spellbook")
+                rootDescription:CreateTitle("Macro Action Bar")
                 rootDescription:CreateButton("Hide minimap icon", function()
                     smb.setMinimapIconShown(false)
-                    print(addonName .. ": minimap icon hidden. Turn it back on in Options > AddOns > Macro Spellbook.")
+                    print(addonName .. ": minimap icon hidden. Turn it back on in Options > AddOns > Macro Action Bar.")
                 end)
             end)
         else
@@ -102,14 +102,14 @@ local function createButton()
     button:SetShown(smb.minimapIconShown())
 end
 
--- Options > AddOns > Macro Spellbook
+-- Options > AddOns > Macro Action Bar
 local function createOptionsPanel()
     local panel = CreateFrame("Frame")
-    panel.name = "Macro Spellbook"
+    panel.name = "Macro Action Bar"
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Macro Spellbook")
+    title:SetText("Macro Action Bar")
 
     local check = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
     check:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -2, -12)

@@ -1,4 +1,4 @@
-# Macro Spellbook
+# Macro Action Bar
 
 A World of Warcraft forever addon that allow players to easily configure macro's straight from the spellbook.
 

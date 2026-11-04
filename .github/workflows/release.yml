@@ -12,7 +12,7 @@ on:
   push:
     tags: ["v*"]
     branches: [main]
-    paths: ["src/**", "libs/**", "MacroSpellbook.toc"]
+    paths: ["src/**", "libs/**", "MacroActionBar.toc"]
   workflow_dispatch:
 
 permissions:
