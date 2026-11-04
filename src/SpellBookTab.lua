@@ -132,9 +132,9 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             -- greyed out when it lists no spell to tick (set by the loops below, before the menu shows)
             local hasPicks = false
             -- a sequence can't downrank (see castBody in Macros.lua), so it is also greyed out while Downrank
-            -- In Raids is on, unless one is already set and needs clearing
+            -- In Raids is on. Either way it stays enabled while one is set, so it can be cleared.
             submenu:SetEnabled(function()
-                return hasPicks and (smb.rank(macro) ~= "raid" or smb.hasSequenceOn(macro))
+                return smb.hasSequenceOn(macro) or (hasPicks and smb.rank(macro) ~= "raid")
             end)
             submenu:CreateTitle("Cast In Sequence (resets after 2 sec)")
             submenu:CreateButton("Clear", function()
