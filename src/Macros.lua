@@ -2318,6 +2318,19 @@ function smb.clearSlot(slot)
     ClearCursor()
 end
 
+-- Empties the action slots still holding a macro that was deleted (see slotMacro). Returns whether any were.
+function smb.clearDeletedMacroSlots()
+    if InCombatLockdown() then return false end
+    local cleared = false
+    for slot = 1, MAX_ACTION_SLOTS do
+        if GetActionInfo(slot) == "macro" and not slotMacro(slot) then
+            smb.clearSlot(slot)
+            cleared = true
+        end
+    end
+    return cleared
+end
+
 -- Deletes the WoW macro with this name, if there is one.
 function smb.deleteMacroNamed(name)
     if InCombatLockdown() then return end
@@ -2529,13 +2542,10 @@ function smb.duplicateMacro(macro, slot)
     return variant
 end
 
--- Delete Macro: deletes a variant, and puts the macro it came from on the action slots it was on. Rebuilds
--- smb.macros.
+-- Delete Macro: deletes a variant and empties the action slots it was on. Rebuilds smb.macros.
 function smb.removeVariant(variant)
     if InCombatLockdown() or not variant.variant then return end
-    local slots = smb.macroSlots()[variant.macroName] or NO_SLOTS
-    smb.deleteVariant(variant) -- first, which frees its WoW macro
+    for _, slot in ipairs(smb.macroSlots()[variant.macroName] or NO_SLOTS) do smb.clearSlot(slot) end
+    smb.deleteVariant(variant)
     smb.collectMacros()
-    local source = findMacro(variant.variantBase)
-    if source then placeOnSlots(source, slots) end
 end

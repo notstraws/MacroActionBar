@@ -96,7 +96,8 @@ end
 
 -- A copy turned off (enemy player, nearest or combat rank) is taken off its slots for its spell's own
 -- macro, and deleted with its variants. A macro on several slots stays shared until one button's menu changes
--- it (see smb.editMacro), and a variant lasts until it is deleted or merged, even off the bars.
+-- it (see smb.editMacro), and a variant lasts until it is deleted or merged, even off the bars. Slots left
+-- holding a deleted macro (any macro, deleted anywhere) are emptied.
 local SCAN_RETRY = 0.5 -- seconds to wait while something is on the cursor, e.g. a button being dragged
 local LOGIN_DELAY = 2 -- seconds after entering the world, so the bars have loaded and Cleanup.lua has run
 
@@ -127,7 +128,8 @@ local function scan()
         return
     end
     if #smb.macros == 0 then smb.collectMacros() end
-    if replaceRemovedCopies() then smb.refreshPage() end
+    local replaced = replaceRemovedCopies()
+    if smb.clearDeletedMacroSlots() or replaced then smb.refreshPage() end
 end
 
 function scheduleScan()
@@ -151,7 +153,9 @@ frame:SetScript("OnEvent", function(self, event)
         end)
         return
     end
-    if event == "ACTIONBAR_SLOT_CHANGED" or event == "PLAYER_REGEN_ENABLED" then scheduleScan() end
+    if event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_MACROS" or event == "PLAYER_REGEN_ENABLED" then
+        scheduleScan()
+    end
     -- wrapping needs no combat lockdown, which a /reload in combat has; then it waits for combat to end
     if #buttons == 0 and InCombatLockdown() then
         self:RegisterEvent("PLAYER_REGEN_ENABLED")
