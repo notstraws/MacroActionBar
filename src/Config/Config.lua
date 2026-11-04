@@ -22,7 +22,8 @@ local _, smb = ...
 --   range (melee included) counts as a mouseoverEnemy spell without being listed, except cursor spells, so
 --   mouseoverEnemy only needs the ones the game doesn't flag. Other spells in neither list never offer
 --   it. The same spells offer Cast On "Focus", cast on your focus target (or your target when you have no
---   hostile / friendly focus).
+--   hostile / friendly focus). mouseoverFriend spells (and buffs) also offer Cast On "Self", always cast
+--   on you whatever you have targeted.
 --
 -- dispels: spells that offer "Cast On Enemy Player" (right-click a macro): the page then also lists a second
 --   macro for the spell, right after it, that targets the nearest enemy player, casts
