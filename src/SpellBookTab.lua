@@ -93,6 +93,27 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, prepare)
                     end
                 end)
         end
+        -- the Cast On radios: Target, then Mouseover and Cursor where the macro offers them (see
+        -- smb.offersCastOn), or none when it offers only Target. Greyed out while the macro casts its pet's
+        -- ability, which casts on neither
+        local function addCastOn()
+            if not smb.offersCastOn(macro, "mouseover") and not smb.offersCastOn(macro, "cursor") then return end
+            rootDescription:CreateTitle("Cast On")
+            local function addMode(label, mode)
+                if not smb.offersCastOn(macro, mode) then return end
+                rootDescription:CreateRadio(label,
+                    function() return smb.castOn(macro) == mode end,
+                    function()
+                        if not beforeChange() then return end
+                        smb.setCastOn(macro, mode)
+                        onChange() -- rewrites the macro, the macros casting it with a modifier key, and its subtext
+                    end):SetEnabled(function() return not smb.isOptionOn(macro, "pet") end)
+            end
+            addMode("Target", nil)
+            addMode("Mouseover", "mouseover")
+            addMode("Cursor", "cursor")
+            rootDescription:CreateDivider()
+        end
         -- the Sequence submenu: the spells cast after the macro's own, ticked in order: the ones
         -- smb.canSequence allows, under their section's title
         local function addSequenceMenu()
@@ -198,11 +219,9 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, prepare)
             if removable then addOption("Cast On Nearest Player", "nearest") end
         elseif macro.combatCopy then
             if removable then addOption("Rank 1 Out Of Combat", "combatRank1") end
-            if macro.target then addOption("Cast On Mouseover", "mouseover") end
-            if macro.cursor then addOption("Cast At Cursor", "cursor") end
+            addCastOn()
         else
-            if macro.target then addOption("Cast On Mouseover", "mouseover") end
-            if macro.cursor then addOption("Cast At Cursor", "cursor") end
+            addCastOn()
             if macro.petAbility then addOption("Cast " .. macro.petAbility .. " If Summoned", "pet") end
         end
         -- the Rank submenu, for the class config's raidRank1 spells: one radio per rank the macro offers
@@ -719,10 +738,10 @@ function setMacro(button, macro, bars)
     elseif smb.isOptionOn(macro, "pet") then
         button.subText:SetText("Pet")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif smb.isOptionOn(macro, "cursor") then
+    elseif smb.castOn(macro) == "cursor" then
         button.subText:SetText("Cursor")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
-    elseif smb.isOptionOn(macro, "mouseover") then
+    elseif smb.castOn(macro) == "mouseover" then
         button.subText:SetText("Mouseover")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasSequenceOn(macro) then

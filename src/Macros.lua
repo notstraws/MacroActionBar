@@ -22,8 +22,9 @@ local function maxAccountMacros()
     return MAX_ACCOUNT_MACROS or 120
 end
 
--- Per-account sets of spell names, keyed by setting: "mouseover" (macro casts on the mouseover unit
--- first), "cursor" (macro casts a ground-targeted spell where the cursor points), "focus" (the page
+-- Per-account sets of spell names, keyed by setting: "castOn" (where the macro casts, see smb.castOn:
+-- "mouseover", on the mouseover unit first, or "cursor", a ground-targeted spell where the cursor points; it
+-- replaced the old "mouseover" and "cursor" sets, see migrate, which are kept but no longer read), "focus" (the page
 -- also lists a copy of the macro that casts on the focus target), "enemyPlayer" (the page also lists a
 -- copy of a dispels spell's macro that casts on the nearest enemy player), "nearest" (the page also lists
 -- a copy of a buffs spell's macro that casts on the nearest friendly player), "combatRank1" (the page also
@@ -349,7 +350,7 @@ function smb.classOffersAutoShot()
     return autoShot ~= nil and not autoShot.unlearned
 end
 
--- Whether a macro offers an option ("mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "spam",
+-- Whether a macro offers an option ("focus", "enemyPlayer", "nearest", "combatRank1", "pet", "spam",
 -- "petAttack", "stopCast" or "startAttack", or an equipment macro's "equipStopAttack" or "equipStopCast") and
 -- the player turned it on.
 function smb.isOptionOn(macro, key)
@@ -371,9 +372,7 @@ function smb.isOptionOn(macro, key)
         return on
     end
     local offered
-    if key == "cursor" then
-        offered = macro.cursor
-    elseif key == "nearest" then
+    if key == "nearest" then
         offered = macro.buff
     elseif key == "enemyPlayer" then
         offered = macro.dispel
@@ -387,6 +386,52 @@ function smb.isOptionOn(macro, key)
         offered = macro.target ~= nil
     end
     return offered and settings(key)[settingKey(macro, key)] == true
+end
+
+-- The saved settings' format: 2 stores where a macro casts as one "castOn" setting instead of the old
+-- "mouseover" and "cursor" flags.
+local SCHEMA = 2
+
+-- Brings the account's saved settings up to SCHEMA, once. Every "mouseover" spell casts on the mouseover,
+-- then every "cursor" spell at the cursor, so a spell that had both keeps casting at the cursor, as castBody
+-- did. The old sets stay in the saved variables but are no longer read.
+local function migrate()
+    MacroSpellbookDB = MacroSpellbookDB or {}
+    if (MacroSpellbookDB.schema or 1) >= SCHEMA then return end
+    local castOn = settings("castOn")
+    for _, mode in ipairs({"mouseover", "cursor"}) do
+        for key, on in pairs(MacroSpellbookDB[mode] or {}) do
+            if on == true then castOn[key] = mode end
+        end
+    end
+    MacroSpellbookDB.schema = SCHEMA
+end
+
+-- The "castOn" settings, migrated first.
+local function castOnSettings()
+    migrate()
+    return settings("castOn")
+end
+
+-- Whether a macro offers a "castOn" mode: nil (Target, the plain cast) always, "mouseover" when its spell has
+-- a mouseover conditional (macro.target) and "cursor" for a ground-targeted spell (macro.cursor). A focus,
+-- enemy player or nearest copy casts on its own target, so it offers neither, nor do custom and equipment
+-- macros.
+function smb.offersCastOn(macro, mode)
+    if mode == nil then return true end
+    if macro.custom or macro.equipment or macro.focus or macro.enemyPlayer or macro.nearest then return false end
+    if mode == "mouseover" then return macro.target ~= nil end
+    if mode == "cursor" then return macro.cursor == true end
+    return false
+end
+
+-- Where a macro casts: nil (on the target), "mouseover" or "cursor". A summon macro casting its pet's ability
+-- (the "pet" option) casts on neither, so it is nil while that is on, keeping the setting. A copy has its own
+-- (see settingKey).
+function smb.castOn(macro)
+    if smb.isOptionOn(macro, "pet") then return nil end
+    local mode = castOnSettings()[settingKey(macro)]
+    if mode ~= nil and smb.offersCastOn(macro, mode) then return mode end
 end
 
 -- Whether a spell macro offers each rank but Normal (nil), which every one does: "raid" casts rank 1 in a
@@ -879,9 +924,10 @@ smb.macroByMacroName = {}
 local function targetedClause(condition, other, noToggle)
     local name = noToggle and other.spam == NO_TOGGLE and NO_TOGGLE .. other.name or smb.castName(other)
     local conditional = condition and "[" .. condition .. "]" or ""
-    if smb.isOptionOn(other, "cursor") then
+    local castOn = smb.castOn(other)
+    if castOn == "cursor" then
         conditional = cond(nil, condition, "@cursor")
-    elseif smb.isOptionOn(other, "mouseover") then
+    elseif castOn == "mouseover" then
         conditional = cond(nil, condition, "@mouseover," .. other.target .. ",nodead") .. "[" .. (condition or "") .. "]"
     end
     return (conditional ~= "" and conditional .. " " or "") .. name .. "; "
@@ -1191,13 +1237,14 @@ local function castBody(macro)
         end
         return "/cast " .. mods .. prefix .. name
     end
+    local castOn = smb.castOn(macro)
     -- a combat rank copy casts rank 1 out of combat and the highest rank in it, targeted like a spell's own
     -- macro; it offers no sequence, raid downrank or modifiers
     if macro.combatCopy then
         local targets = {""}
-        if smb.isOptionOn(macro, "cursor") then
+        if castOn == "cursor" then
             targets = {"@cursor"}
-        elseif smb.isOptionOn(macro, "mouseover") then
+        elseif castOn == "mouseover" then
             targets = {"@mouseover," .. macro.target .. ",nodead", ""}
         end
         return header .. rank1Cast(name, targets, spam, "", "nocombat")
@@ -1211,9 +1258,9 @@ local function castBody(macro)
             targets = {"harm,nodead"}
         elseif macro.focus then
             targets = {"@focus," .. macro.target .. ",nodead", ""}
-        elseif smb.isOptionOn(macro, "cursor") then
+        elseif castOn == "cursor" then
             targets = {"@cursor"}
-        elseif smb.isOptionOn(macro, "mouseover") then
+        elseif castOn == "mouseover" then
             targets = {"@mouseover," .. macro.target .. ",nodead", ""}
         end
         return header .. (macro.nearest and NEAREST_LINE or "") .. (macro.enemyPlayer and ENEMY_LINE or "")
@@ -1237,10 +1284,10 @@ local function castBody(macro)
         return header .. "/cast " .. mods .. cond(spam, "pet:" .. family) .. " " .. macro.petAbility .. "; "
             .. (spam and cond(spam) .. " " or "") .. name
     end
-    if smb.isOptionOn(macro, "cursor") then
+    if castOn == "cursor" then
         return header .. cast(cond(spam, "@cursor"))
     end
-    if smb.isOptionOn(macro, "mouseover") then
+    if castOn == "mouseover" then
         return header .. cast(cond(spam, "@mouseover," .. macro.target .. ",nodead") .. "[" .. (spam or "") .. "]")
     end
     return header .. cast(cond(spam))
@@ -1990,10 +2037,9 @@ function smb.isOnActionBars(macro, bars)
     return smb.countsSpellsOnBars() or macro.body == bareBody(macro.name)
 end
 
--- Flips a setting ("mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "spam", "petAttack",
+-- Flips a setting ("focus", "enemyPlayer", "nearest", "combatRank1", "pet", "spam", "petAttack",
 -- "stopCast" or "startAttack", or "equipStopAttack" or "equipStopCast" on an equipment macro) and rewrites
--- the macro if it already exists. In combat the rewrite waits until the next pickup. The focus, enemyPlayer, nearest and combatRank1 settings add or remove a page entry, and mouseover and cursor change the macros that
--- cast this spell with a modifier key, so the page must be rebuilt after any of them. Turning focus off also clears
+-- the macro if it already exists. In combat the rewrite waits until the next pickup. The focus, enemyPlayer, nearest and combatRank1 settings add or remove a page entry, so the page must be rebuilt after any of them. Turning focus off also clears
 -- the modifier picks that cast the spell on the focus target.
 -- Stores a defaulted setting only where it differs from the default, so the rest follow a change of default.
 local function setDefaulted(macro, key, on)
@@ -2051,6 +2097,15 @@ end
 function smb.toggleOption(macro, key)
     if COPY_OPTIONS[key] and smb.isOptionOn(macro, key) then noteRemovedCopy(macro, key) end
     flipOption(macro, key)
+    rewrite(macro)
+end
+
+-- Sets where a macro casts (nil for Target, "mouseover" or "cursor", see smb.offersCastOn), then rewrites
+-- it like smb.toggleOption. It changes the macros that cast this spell with a modifier key or as a follow-up
+-- too, so the page must be rebuilt after.
+function smb.setCastOn(macro, mode)
+    if not smb.offersCastOn(macro, mode) then return end
+    castOnSettings()[settingKey(macro)] = mode
     rewrite(macro)
 end
 
@@ -2167,7 +2222,7 @@ end
 
 -- The settings a spell macro stores under its settingKey, and an equipment macro under its slot.
 local SPELL_SETTINGS = {
-    "mouseover", "cursor", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "rank", "spam",
+    "castOn", "focus", "enemyPlayer", "nearest", "combatRank1", "pet", "rank", "spam",
     "petAttack", "stopCast", "startAttack", "startAttackBefore", "petAttackAfter", "autoShotBefore",
     "autoShotAfter", "petFollowBefore", "petFollowAfter",
     "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "clearDeadBefore", "targetEnemyBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
