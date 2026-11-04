@@ -33,7 +33,8 @@ local EQUIPMENT_OPTIONS = { equipStopAttack = true, equipStopCast = true }
 -- This character's sets of spell names, keyed by setting (the account's until each character got its own, see
 -- migrateCharacter): "castOn" (where the macro casts, see smb.castOn:
 -- "mouseover", on the mouseover unit first, "focus", on the focus target first, "cursor", a ground-targeted
--- spell where the cursor points, or "nearest", a buffs spell on the nearest friendly player; it replaced the old
+-- spell where the cursor points, "nearest", a buffs spell on the nearest friendly player, or "self", a friendly
+-- or buffs spell always on you; it replaced the old
 -- "mouseover" and "cursor" sets and the old "focus" and "nearest" copies, see migrate), "enemyPlayer" (the page
 -- also lists a copy of a dispels spell's macro that casts on the nearest enemy player), "pet" (a summon macro casts the
 -- pet's ability while that pet is out), "spam"
@@ -61,7 +62,7 @@ local EQUIPMENT_OPTIONS = { equipStopAttack = true, equipStopCast = true }
 -- per spell name, {shift = name, ctrl = name, alt = name}: the macro casts that spell while the key is held
 -- (see smb.modifierSpell), or uses the item in
 -- equipment slot shiftSlot (ctrlSlot, altSlot) instead (see smb.modifierSlot). shiftCastOn (ctrlCastOn,
--- altCastOn) sets where that key's spell is cast: "mouseover", "focus" or "cursor", or the target when unset (see
+-- altCastOn) sets where that key's spell is cast: "mouseover", "focus", "cursor" or "self", or the target when unset (see
 -- smb.modifierCastOn). "sequence" holds a
 -- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "followUp"
 -- holds a cooldown spell's one spell name: the macro casts it on the same press, after its own. "forms"
@@ -498,19 +499,20 @@ local function migrate()
 end
 
 -- Whether a macro offers a "castOn" mode: nil (Target, the plain cast) always, "mouseover" and "focus" when
--- its spell has a mouseover conditional (macro.target), "cursor" for a ground-targeted spell (macro.cursor)
--- and "nearest" for a buffs spell (macro.buff). An enemy player copy casts on its own target, so it offers
--- none, nor do custom and equipment macros.
+-- its spell has a mouseover conditional (macro.target), "cursor" for a ground-targeted spell (macro.cursor),
+-- "nearest" for a buffs spell (macro.buff) and "self" for a friendly or buffs spell. An enemy player copy casts
+-- on its own target, so it offers none, nor do custom and equipment macros.
 function smb.offersCastOn(macro, mode)
     if mode == nil then return true end
     if macro.custom or macro.equipment or macro.enemyPlayer then return false end
     if mode == "mouseover" or mode == "focus" then return macro.target ~= nil end
     if mode == "cursor" then return macro.cursor == true end
     if mode == "nearest" then return macro.buff == true end
+    if mode == "self" then return macro.target == "help" or macro.buff == true end
     return false
 end
 
--- Where a macro casts: nil (on the target), "mouseover", "focus", "cursor" or "nearest". A summon macro casting its pet's ability
+-- Where a macro casts: nil (on the target), "mouseover", "focus", "cursor", "nearest" or "self". A summon macro casting its pet's ability
 -- (the "pet" option) casts on neither, so it is nil while that is on, keeping the setting. A copy has its own
 -- (see settingKey).
 function smb.castOn(macro)
@@ -808,7 +810,7 @@ function smb.modifierSlot(macro, mod)
     return spells and spells[mod .. "Slot"]
 end
 
--- Where a macro casts the spell set for a modifier key: "mouseover", "focus" or "cursor", or nil on the target.
+-- Where a macro casts the spell set for a modifier key: "mouseover", "focus", "cursor" or "self", or nil on the target.
 function smb.modifierCastOn(macro, mod)
     if not smb.offersModifiers(macro) then return nil end
     migrate()
@@ -1033,7 +1035,7 @@ smb.macroByMacroName = {}
 -- spell cast on the nearest player is cast on the target: targeting the nearest player takes lines of its own. With
 -- noToggle, a toggle spell, such as an aspect, is always cast as "!<spell>", whatever its own page macro's
 -- spam option. With no condition (nil), the clause has none of its own, e.g. "[@cursor] Blizzard; ", or
--- "Fireball; " for a plain cast. castOn ("target", "mouseover", "focus" or "cursor") casts it there instead.
+-- "Fireball; " for a plain cast. castOn ("target", "mouseover", "focus", "cursor" or "self") casts it there instead.
 local function targetedClause(condition, other, noToggle, castOn)
     local name = noToggle and other.spam == NO_TOGGLE and NO_TOGGLE .. other.name or smb.castName(other)
     local conditional = condition and "[" .. condition .. "]" or ""
@@ -1047,6 +1049,8 @@ local function targetedClause(condition, other, noToggle, castOn)
     if selfFallback(other) then onTarget = cond(nil, condition, "help,nodead") .. cond(nil, condition, "@player") end
     if castOn == "cursor" then
         conditional = cond(nil, condition, "@cursor")
+    elseif castOn == "self" then
+        conditional = cond(nil, condition, "@player")
     elseif castOn == "mouseover" or castOn == "focus" then
         conditional = cond(nil, condition, "@" .. castOn .. "," .. other.target .. ",nodead") .. onTarget
     elseif castOn == nil and selfFallback(other) then
@@ -1355,7 +1359,7 @@ local function castBody(macro)
     local castOn = smb.castOn(macro)
     -- a friendly spell falling back to you casts on a live friendly target, else on you, where it would cast
     -- on the target (see selfFallback)
-    local fallback = selfFallback(macro) and castOn ~= "nearest" and castOn ~= "cursor"
+    local fallback = selfFallback(macro) and castOn ~= "nearest" and castOn ~= "cursor" and castOn ~= "self"
     -- a downranked macro casts rank 1 in a raid group ("raid") or out of combat ("combat"), and its highest
     -- rank otherwise. A sequence can't downrank: a rank 1 clause per target would repeat every step
     if rank ~= nil and not steps then
@@ -1366,6 +1370,8 @@ local function castBody(macro)
             targets = {"harm,nodead"}
         elseif castOn == "cursor" then
             targets = {"@cursor"}
+        elseif castOn == "self" then
+            targets = {"@player"}
         elseif castOn == "mouseover" or castOn == "focus" then
             targets = {"@" .. castOn .. "," .. macro.target .. ",nodead", ""}
         end
@@ -1393,6 +1399,9 @@ local function castBody(macro)
     end
     if castOn == "cursor" then
         return header .. cast(cond(spam, "@cursor"))
+    end
+    if castOn == "self" then
+        return header .. cast(cond(spam, "@player"))
     end
     local onTarget = fallback and cond(spam, "help,nodead") .. cond(spam, "@player") or "[" .. (spam or "") .. "]"
     if castOn == "mouseover" or castOn == "focus" then
@@ -2137,7 +2146,7 @@ function smb.toggleOption(macro, key)
     rewrite(macro)
 end
 
--- Sets where a macro casts (nil for Target, "mouseover", "focus", "cursor" or "nearest", see smb.offersCastOn), then rewrites
+-- Sets where a macro casts (nil for Target, "mouseover", "focus", "cursor", "nearest" or "self", see smb.offersCastOn), then rewrites
 -- it like smb.toggleOption. It changes the macros that cast this spell with a modifier key or as a follow-up
 -- too, so the page must be rebuilt after.
 function smb.setCastOn(macro, mode)
@@ -2193,7 +2202,7 @@ function smb.toggleRacial(macro, racial, side)
 end
 
 -- Sets the spell a macro casts while a modifier key ("shift", "ctrl" or "alt") is held, or clears it with
--- nil, then rewrites the macro like smb.toggleOption. castOn ("mouseover", "focus" or "cursor", or nil for the
+-- nil, then rewrites the macro like smb.toggleOption. castOn ("mouseover", "focus", "cursor" or "self", or nil for the
 -- target) sets where it is cast (see smb.modifierCastOn).
 function smb.setModifierSpell(macro, mod, name, castOn)
     local set = settings("modifiers")

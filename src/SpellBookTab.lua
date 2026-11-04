@@ -65,7 +65,7 @@ local COPY_KEYS = {enemyPlayer = true}
 local RANKS = {{label = "Normal"}, {rank = "raid", label = "Downrank In Raids"}}
 
 -- The labels of a modifier pick's Cast On modes but Target (see smb.modifierCastOn).
-local CAST_ON_LABELS = {mouseover = "Mouseover", focus = "Focus", cursor = "Cursor"}
+local CAST_ON_LABELS = {mouseover = "Mouseover", focus = "Focus", cursor = "Cursor", self = "Self"}
 
 function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
     if not smb.hasOptions(macro) then return end
@@ -100,12 +100,13 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                     end
                 end)
         end
-        -- the Cast On radios: Target, then Mouseover, Focus, Cursor and Nearest Player where the macro offers them (see
-        -- smb.offersCastOn), or none when it offers only Target. Greyed out while the macro casts its pet's
+        -- the Cast On radios: Target, then Mouseover, Focus, Cursor, Nearest Player and Self where the macro offers
+        -- them (see smb.offersCastOn), or none when it offers only Target. Greyed out while the macro casts its pet's
         -- ability, which casts on none of them
         local function addCastOn()
             if not smb.offersCastOn(macro, "mouseover") and not smb.offersCastOn(macro, "focus")
-                and not smb.offersCastOn(macro, "cursor") and not smb.offersCastOn(macro, "nearest") then return end
+                and not smb.offersCastOn(macro, "cursor") and not smb.offersCastOn(macro, "nearest")
+                and not smb.offersCastOn(macro, "self") then return end
             rootDescription:CreateTitle("Cast On")
             local function addMode(label, mode)
                 if not smb.offersCastOn(macro, mode) then return end
@@ -121,6 +122,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             addMode("Focus", "focus")
             addMode("Cursor", "cursor")
             addMode("Nearest Player", "nearest")
+            addMode("Self", "self")
             rootDescription:CreateDivider()
         end
         -- the Sequence submenu: the spells cast after the macro's own, ticked in order: the ones
@@ -408,7 +410,8 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
             -- picks it on Target
             local function addPickCastOn(radio, name)
                 local picked = smb.macroByName[name]
-                if not smb.offersCastOn(picked, "mouseover") and not smb.offersCastOn(picked, "cursor") then return end
+                if not smb.offersCastOn(picked, "mouseover") and not smb.offersCastOn(picked, "cursor")
+                    and not smb.offersCastOn(picked, "self") then return end
                 radio:CreateTitle("Cast On")
                 local function addMode(modeLabel, mode)
                     if mode ~= nil and not smb.offersCastOn(picked, mode) then return end
@@ -420,6 +423,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                 addMode("Mouseover", "mouseover")
                 addMode("Focus", "focus")
                 addMode("Cursor", "cursor")
+                addMode("Self", "self")
             end
             local listed = false
             for _, section in ipairs(menuOrder(sections)) do
@@ -769,6 +773,9 @@ function setMacro(button, macro, bars)
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.castOn(macro) == "nearest" then
         button.subText:SetText("Nearest")
+        button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
+    elseif smb.castOn(macro) == "self" then
+        button.subText:SetText("Self")
         button.subText:SetTextColor(unpack(MOUSEOVER_COLOR))
     elseif smb.hasSequenceOn(macro) then
         button.subText:SetText("Sequence")
