@@ -86,6 +86,16 @@ function smb.setCountSpellsOnBars(on)
     MacroSpellbookDB.countSpellsOnBars = on or nil
 end
 
+-- Whether opening the spellbook shows the Macro Spellbook page instead of the native spell page.
+function smb.opensOnSpellbook()
+    return MacroSpellbookDB ~= nil and MacroSpellbookDB.openOnSpellbook == true
+end
+
+function smb.setOpensOnSpellbook(on)
+    MacroSpellbookDB = MacroSpellbookDB or {}
+    MacroSpellbookDB.openOnSpellbook = on or nil
+end
+
 -- Whether "petAttack" is on for every enemy spell macro that has no setting of its own.
 function smb.petAttacksByDefault()
     return MacroSpellbookDB ~= nil and MacroSpellbookDB.petAttackDefault == true
@@ -2529,17 +2539,11 @@ function smb.editMacro(macro, slot, plainSpell, apply)
     return survivor
 end
 
--- Duplicate Macro: a new variant of a spell macro with the same settings, put on slot when given (from an
--- action button's menu). Returns it, or nil when it couldn't be made or placed (smb.pickupMacro said why).
-function smb.duplicateMacro(macro, slot)
+-- Duplicate Macro: a new variant of a spell macro with the same settings. Returns it, or nil when it couldn't
+-- be made.
+function smb.duplicateMacro(macro)
     if InCombatLockdown() then return nil end
-    local variant = smb.newVariant(macro)
-    if variant and slot and not smb.placeMacro(variant, slot) then
-        smb.deleteVariant(variant)
-        smb.collectMacros()
-        return nil
-    end
-    return variant
+    return smb.newVariant(macro)
 end
 
 -- Delete Macro: deletes a variant and empties the action slots it was on. Rebuilds smb.macros.
