@@ -4,6 +4,8 @@ local _, smb = ...
 -- right-click menu) instead of casting it, and so does right-clicking a plain spell that has a page macro.
 -- Action buttons are secure, so a secure wrap on each one cancels the click; it only does so out of combat,
 -- on a button flagged as holding a macro (or a plain spell's macro) with options.
+-- Holding Alt over any macro on the bars shows its text in place of the game's tooltip (a setting in
+-- Options > AddOns turns this off).
 
 local BARS = {
     "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarRightButton",
@@ -81,6 +83,45 @@ local function wrapButtons()
         end
     end
 end
+
+-- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
+function smb.barMacroTextShown()
+    return MacroActionBarDB == nil or MacroActionBarDB.barMacroTextHide ~= true
+end
+
+function smb.setBarMacroTextShown(on)
+    MacroActionBarDB = MacroActionBarDB or {}
+    MacroActionBarDB.barMacroTextHide = (not on) or nil
+end
+
+-- With Alt held, a macro's tooltip becomes its name and text. Hooking SetAction rather than the buttons'
+-- OnEnter keeps it through the buttons' own tooltip refreshes, and covers bar addons that use it too.
+hooksecurefunc(GameTooltip, "SetAction", function(tooltip, slot)
+    if not (IsAltKeyDown() and smb.barMacroTextShown()) then return end
+    local actionType, id, subType = GetActionInfo(slot)
+    if actionType ~= "macro" then return end
+    local name = GetActionText(slot) or (subType ~= "spell" and GetMacroInfo(id))
+    local body = name and GetMacroBody(name)
+    if not body then return end
+    tooltip:ClearLines()
+    tooltip:SetText(name)
+    smb.addMacroBodyLines(body)
+    tooltip:Show()
+end)
+
+-- Pressing or releasing Alt over an action button redraws its tooltip at once.
+local modifierFrame = CreateFrame("Frame")
+modifierFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
+modifierFrame:SetScript("OnEvent", function(_, _, key)
+    if key ~= "LALT" and key ~= "RALT" then return end
+    local owner = GameTooltip:IsShown() and GameTooltip:GetOwner()
+    if not owner then return end
+    if owner.action and owner.SetTooltip then
+        owner:SetTooltip()
+    elseif tContains(buttons, owner) and ActionButton_SetTooltip then
+        ActionButton_SetTooltip(owner)
+    end
+end)
 
 local pending = false
 

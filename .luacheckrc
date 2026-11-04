@@ -21,7 +21,7 @@ read_globals = {
 	"C_TooltipInfo", "C_Trainer", "Enum", "EventRegistry", "EventUtil", "InputUtil", "MenuResponse", "MenuUtil",
 
 	-- Functions
-	"ActionButton_GetPagedID", "ClearCursor", "CreateFrame", "CreateMacro", "DeleteMacro", "EditMacro", "GetActionInfo", "GetActionText",
+	"ActionButton_GetPagedID", "ActionButton_SetTooltip", "GetMacroBody", "hooksecurefunc","ClearCursor", "CreateFrame", "CreateMacro", "DeleteMacro", "EditMacro", "GetActionInfo", "GetActionText",
 	"GetInventoryItemLink", "GetInventoryItemTexture", "GetItemSpell",
 	"GetMacroIndexByName", "GetMacroInfo", "GetNumMacros", "GetNumShapeshiftForms",
 	"GetNumSpellTabs", "GetNumTrainerServices", "GetShapeshiftFormInfo", "GetSpellBookItemInfo",

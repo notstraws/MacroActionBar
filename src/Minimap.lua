@@ -1,7 +1,8 @@
 local addonName, smb = ...
 
 -- A minimap button that opens the Macro Action Bar page (SpellBookTab.lua), and the addon's page under
--- Options > AddOns, which turns the button on and off. Both settings are account-wide.
+-- Options > AddOns, which turns the button and the action bars' Alt tooltip (ActionBars.lua) on and off.
+-- These settings are account-wide.
 
 local DEFAULT_ANGLE = 225 -- degrees around the minimap, counterclockwise from the right: bottom left
 
@@ -118,8 +119,18 @@ local function createOptionsPanel()
     label:SetPoint("LEFT", check, "RIGHT", 2, 0)
     label:SetText("Show minimap icon")
 
+    local textCheck = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    textCheck:SetPoint("TOPLEFT", check, "BOTTOMLEFT", 0, -4)
+    textCheck:SetScript("OnClick", function(self) smb.setBarMacroTextShown(self:GetChecked()) end)
+    local textLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    textLabel:SetPoint("LEFT", textCheck, "RIGHT", 2, 0)
+    textLabel:SetText("Hold Alt over a macro on your action bars to see its text")
+
     -- the right-click menu can hide the icon while the panel is closed
-    panel:SetScript("OnShow", function() check:SetChecked(smb.minimapIconShown()) end)
+    panel:SetScript("OnShow", function()
+        check:SetChecked(smb.minimapIconShown())
+        textCheck:SetChecked(smb.barMacroTextShown())
+    end)
 
     if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
         Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, panel.name))
