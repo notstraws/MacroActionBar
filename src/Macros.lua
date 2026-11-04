@@ -9,7 +9,6 @@ local MAX_MACRO_NAME = 16 -- longer names are truncated by CreateMacro, so GetMa
 local MAX_MACRO_BODY = 255
 local NEAREST_SUFFIX = " @N" -- ends a nearest copy's WoW macro name, keeping it apart from the spell's own
 local ENEMY_SUFFIX = " @E" -- ends an enemy player copy's WoW macro name, likewise
-local COMBAT_RANK_SUFFIX = " R1" -- ends a combat rank copy's WoW macro name, likewise
 
 -- MAX_CHARACTER_MACROS and MAX_ACCOUNT_MACROS come from the load-on-demand Blizzard_MacroUI, so they
 -- are nil until the macro window has been opened once.
@@ -26,8 +25,7 @@ end
 -- spell where the cursor points; it replaced the old "mouseover" and "cursor" sets and the old "focus" copies,
 -- see migrate), "enemyPlayer" (the page also lists a
 -- copy of a dispels spell's macro that casts on the nearest enemy player), "nearest" (the page also lists
--- a copy of a buffs spell's macro that casts on the nearest friendly player), "combatRank1" (the page also
--- lists a copy of a combatRank1 spell's macro that casts rank 1 out of combat), "pet" (a summon macro casts the
+-- a copy of a buffs spell's macro that casts on the nearest friendly player), "pet" (a summon macro casts the
 -- pet's ability while that pet is out), "spam"
 -- (the macro does nothing while its channelled spell is channelling, its stealth spell is on, or you are in
 -- its shapeshift form, and casts a toggle spell as "!<spell>" so it doesn't toggle off), "petAttack" (the macro also sends
@@ -42,7 +40,8 @@ end
 -- smb.offersCancelIceBlock). "clearDeadBefore" adds /cleartarget [dead] and "targetEnemyBefore" /targetenemy
 -- [noharm][dead] before the cast (see smb.offersRetarget); true or false overrides their defaults (clearDeadDefault,
 -- targetEnemyDefault), nil follows them. "rank" holds a rank instead of a flag: "raid" (the macro casts rank 1 in a
--- raid group, see smb.rank) or nil (its highest rank); an old "raidRank1" flag becomes "raid". "useItems" and "useItemsAfter" hold a list of equipment
+-- raid group, see smb.rank), "combat" (rank 1 out of combat) or nil (its highest rank); an old "raidRank1" flag
+-- becomes "raid", and an old "combatRank1" flag (which added a copy) "combat". "useItems" and "useItemsAfter" hold a list of equipment
 -- slots instead of a flag: the macro uses each slot's item, in that order, before (or after) the cast. "racials" and
 -- "racialsAfter" hold a set of racial and offGcd spell names: the macro casts each one before (or after) the cast. "order" and
 -- "orderAfter" hold the order the player ticked a side's lines in, as a list of ids ("stopCast", "startAttack",
@@ -55,7 +54,7 @@ end
 -- list of spell names per spell: the macro /castsequences its own spell, then those, in that order. "followUp"
 -- holds a cooldown spell's one spell name: the macro casts it on the same press, after its own. "forms"
 -- holds a table per spell name, {[form name] = spell name}: the macro casts that spell while in that form of
--- the class config's forms (see smb.formSpell). An enemy player, nearest or combat rank copy stores its
+-- the class config's forms (see smb.formSpell). An enemy player or nearest copy stores its
 -- own settings under its spell's name plus the copy's suffix, e.g. "Dispel Magic @E" (see settingKey), and a
 -- variant under the key of the macro it came from plus " #<n>", e.g. "Fireball #2" (see variants).
 -- Read lazily: saved variables are not loaded until ADDON_LOADED, after this file runs.
@@ -218,10 +217,10 @@ end
 
 -- The options that add a copy of a spell macro. A copy stores them under its spell's name, like the spell's
 -- own macro, so unticking one in the copy's menu removes the copy.
-local COPY_OPTIONS = { enemyPlayer = true, nearest = true, combatRank1 = true }
+local COPY_OPTIONS = { enemyPlayer = true, nearest = true }
 
--- The key a spell macro stores a setting (key, optional) under: its spell's name, or, for an enemy player,
--- nearest or combat rank copy, the name with the copy's suffix, so each copy has its own options apart
+-- The key a spell macro stores a setting (key, optional) under: its spell's name, or, for an enemy player
+-- or nearest copy, the name with the copy's suffix, so each copy has its own options apart
 -- from its spell's macro. A variant (see smb.newVariant) adds " #<n>" to the key of the macro it came from,
 -- e.g. "Fireball #2" or "Dispel Magic @E #2". COPY_OPTIONS are always stored under the spell's name.
 local function settingKey(macro, key)
@@ -231,8 +230,6 @@ local function settingKey(macro, key)
         base = macro.name .. ENEMY_SUFFIX
     elseif macro.nearest then
         base = macro.name .. NEAREST_SUFFIX
-    elseif macro.combatCopy then
-        base = macro.name .. COMBAT_RANK_SUFFIX
     end
     if macro.variant then return base .. " #" .. macro.variant end
     return base
@@ -393,7 +390,7 @@ function smb.classOffersAutoShot()
     return autoShot ~= nil and not autoShot.unlearned
 end
 
--- Whether a macro offers an option ("enemyPlayer", "nearest", "combatRank1", "pet", "spam",
+-- Whether a macro offers an option ("enemyPlayer", "nearest", "pet", "spam",
 -- "petAttack", "stopCast" or "startAttack", or an equipment macro's "equipStopAttack" or "equipStopCast") and
 -- the player turned it on.
 function smb.isOptionOn(macro, key)
@@ -419,8 +416,6 @@ function smb.isOptionOn(macro, key)
         offered = macro.buff
     elseif key == "enemyPlayer" then
         offered = macro.dispel
-    elseif key == "combatRank1" then
-        offered = macro.combatRank1
     elseif key == "pet" then
         offered = macro.petAbility ~= nil
     elseif key == "spam" then
@@ -494,14 +489,22 @@ function smb.castOn(macro)
 end
 
 -- Whether a spell macro offers each rank but Normal (nil), which every one does: "raid" casts rank 1 in a
--- raid group, for the class config's raidRank1 spells (a combat rank copy has none). A later rank adds its
--- own line here.
+-- raid group, for the class config's raidRank1 spells, and "combat" rank 1 out of combat, for its
+-- combatRank1 spells. A later rank adds its own line here and in RANK_CONDITION.
 local RANK_OFFERED = {
     raid = function(macro) return macro.raidRank1 end,
+    combat = function(macro) return macro.combatRank1 end,
 }
 
--- The "rank" settings, once the old "raidRank1" flags are moved into them: once per account, a flag becomes
--- rank "raid". Read lazily, like settings.
+-- The conditional each rank but Normal casts rank 1 under (see castBody).
+local RANK_CONDITION = {raid = "group:raid", combat = "nocombat"}
+
+local removedCopies = {} -- the WoW macro names of copies turned off since smb.takeRemovedCopies
+
+-- The "rank" settings, once the old flags are moved into them, once per account: a "raidRank1" flag becomes
+-- rank "raid", and a "combatRank1" flag, which added a copy ("<spell> R1"), rank "combat", the copy going the
+-- way of one turned off (see noteRemovedCopy), so the action bars put the spell's own macro in its place.
+-- Read lazily, like settings.
 local function rankSettings()
     local set = settings("rank")
     if not MacroSpellbookDB.rankMigrated then
@@ -511,17 +514,28 @@ local function rankSettings()
         MacroSpellbookDB.raidRank1 = nil
         MacroSpellbookDB.rankMigrated = true
     end
+    if not MacroSpellbookDB.combatRankMigrated then
+        for spell, on in pairs(settings("combatRank1")) do
+            if on == true then
+                if set[spell] == nil then set[spell] = "combat" end
+                local copyName = spell:sub(1, MAX_MACRO_NAME - 3) .. " R1"
+                removedCopies[#removedCopies + 1] = {macroName = copyName, spell = spell, copy = {}}
+            end
+        end
+        MacroSpellbookDB.combatRank1 = nil
+        MacroSpellbookDB.combatRankMigrated = true
+    end
     return set
 end
 
--- Whether a macro offers a rank: nil (Normal, the highest rank) or "raid".
+-- Whether a macro offers a rank: nil (Normal, the highest rank), "raid" or "combat".
 function smb.offersRank(macro, rank)
     if rank == nil then return true end
     local offered = RANK_OFFERED[rank]
     return offered ~= nil and offered(macro) == true
 end
 
--- The rank a macro casts: nil (Normal) or "raid". A stored rank it doesn't offer reads as Normal, keeping
+-- The rank a macro casts: nil (Normal), "raid" or "combat". A stored rank it doesn't offer reads as Normal, keeping
 -- the setting. It doesn't check the sequence, though a sequence can't downrank (see castBody): smb.offersSequence
 -- and the menu may check the rank, so checking the sequence here would loop.
 function smb.rank(macro)
@@ -742,9 +756,9 @@ end
 -- several keys held, the first wins.
 smb.MODIFIERS = {"shift", "ctrl", "alt"}
 
--- Whether a page macro is an enemy player, nearest or combat rank copy of a spell macro.
+-- Whether a page macro is an enemy player or nearest copy of a spell macro.
 local function isCopy(macro)
-    return macro.enemyPlayer == true or macro.nearest == true or macro.combatCopy == true
+    return macro.enemyPlayer == true or macro.nearest == true
 end
 
 -- Every spell macro but a copy offers a spell for each modifier key.
@@ -846,10 +860,9 @@ local SEQUENCE_RESET = "reset=2 "
 -- A spell macro in a sequence section offers a cast sequence, unless it is a cooldown spell (see Config.lua),
 -- which offers a follow-up instead (see smb.offersFollowUp), or casts its pet's ability: a summon can't be
 -- sequenced. A copy has its own sequence (see settingKey), so e.g. buffing the nearest player can cast
--- different spells from the spell's own macro. A combat rank copy has none: a sequence can't downrank (see castBody).
+-- different spells from the spell's own macro.
 function smb.offersSequence(macro)
     return macro.sequence and not macro.cooldown and smb.offersUseItems(macro) and not smb.isOptionOn(macro, "pet")
-        and not macro.combatCopy
 end
 
 -- Whether a macro's sequence can cast another page macro after its own spell: a learned spell in a sequence
@@ -860,10 +873,9 @@ function smb.canSequence(macro, other)
 end
 
 -- A cooldown spell's macro (see Config.lua) offers one follow-up spell, cast on the same press right after
--- its own, unless it casts its pet's ability. A combat rank copy has none, like a sequence.
+-- its own, unless it casts its pet's ability.
 function smb.offersFollowUp(macro)
     return macro.cooldown and smb.offersUseItems(macro) and not smb.isOptionOn(macro, "pet")
-        and not macro.combatCopy
 end
 
 -- Whether a cooldown macro can follow up with another page macro's spell: a learned spell in a sequence or
@@ -1285,19 +1297,9 @@ local function castBody(macro)
         return "/cast " .. mods .. prefix .. name
     end
     local castOn = smb.castOn(macro)
-    -- a combat rank copy casts rank 1 out of combat and the highest rank in it, targeted like a spell's own
-    -- macro; it offers no sequence, raid downrank or modifiers
-    if macro.combatCopy then
-        local targets = {""}
-        if castOn == "cursor" then
-            targets = {"@cursor"}
-        elseif castOn == "mouseover" or castOn == "focus" then
-            targets = {"@" .. castOn .. "," .. macro.target .. ",nodead", ""}
-        end
-        return header .. rank1Cast(name, targets, spam, "", "nocombat")
-    end
-    -- a sequence can't downrank: a rank 1 clause per target would repeat every step
-    if rank == "raid" and not steps then
+    -- a downranked macro casts rank 1 in a raid group ("raid") or out of combat ("combat"), and its highest
+    -- rank otherwise. A sequence can't downrank: a rank 1 clause per target would repeat every step
+    if rank ~= nil and not steps then
         local targets = {""}
         if macro.nearest then
             targets = {"help,nodead", "@player"}
@@ -1309,7 +1311,7 @@ local function castBody(macro)
             targets = {"@" .. castOn .. "," .. macro.target .. ",nodead", ""}
         end
         return header .. (macro.nearest and NEAREST_LINE or "") .. (macro.enemyPlayer and ENEMY_LINE or "")
-            .. rank1Cast(name, targets, spam, mods, "group:raid") .. (macro.enemyPlayer and LAST_TARGET_FOOTER or "")
+            .. rank1Cast(name, targets, spam, mods, RANK_CONDITION[rank]) .. (macro.enemyPlayer and LAST_TARGET_FOOTER or "")
     end
     -- a nearest copy casts on the player it just targeted, or on you when no friendly player is near
     if macro.nearest then
@@ -1414,8 +1416,6 @@ local function copySuffix(macro)
         suffix = ENEMY_SUFFIX
     elseif macro.nearest then
         suffix = NEAREST_SUFFIX
-    elseif macro.combatCopy then
-        suffix = COMBAT_RANK_SUFFIX
     end
     if macro.variant then suffix = suffix .. " #" .. macro.variant end
     return suffix
@@ -1458,19 +1458,6 @@ local function makeNearestMacro(macro)
     for key, value in pairs(macro) do copy[key] = value end
     copy.nearest = true
     copy.cursor = false
-    copy.petAbility = nil
-    copy.macroName = spellMacroName(copy)
-    return copy
-end
-
--- A copy of a combatRank1 spell macro that casts rank 1 out of combat and the highest rank in combat. Unlike
--- the other copies it keeps its spell's targeting options (mouseover, focus, cursor), set on the copy itself. Like an
--- enemy player copy, it has its own options; unticking combatRank1 removes it.
-local function makeCombatRankMacro(macro)
-    local copy = {}
-    for key, value in pairs(macro) do copy[key] = value end
-    copy.combatCopy = true
-    copy.raidRank1 = false
     copy.petAbility = nil
     copy.macroName = spellMacroName(copy)
     return copy
@@ -1701,12 +1688,10 @@ local function forEachUnlearnedSpell(fn, learned)
 end
 
 -- A page macro's place among its spell's entries: the spell, then its enemy player copy, then its nearest copy,
--- then its combat rank copy, each followed by its variants in number order.
+-- each followed by its variants in number order.
 local function copyRank(macro)
     local rank = 0
-    if macro.combatCopy then
-        rank = 3
-    elseif macro.nearest then
+    if macro.nearest then
         rank = 2
     elseif macro.enemyPlayer then
         rank = 1
@@ -1768,7 +1753,6 @@ function smb.collectMacros()
         local group = {macro}
         if smb.isOptionOn(macro, "enemyPlayer") then group[#group + 1] = makeEnemyPlayerMacro(macro) end
         if smb.isOptionOn(macro, "nearest") then group[#group + 1] = makeNearestMacro(macro) end
-        if smb.isOptionOn(macro, "combatRank1") then group[#group + 1] = makeCombatRankMacro(macro) end
         local mine = variants()
         for i = 1, #group do
             local numbers = {}
@@ -1802,7 +1786,7 @@ function smb.collectMacros()
         forEachUnlearnedSpell(function(name, icon, id) add(name, icon, true, id) end, seen)
     end
     -- by section; within one, first = true custom macros, then spells, then other custom macros, then config
-    -- order, then by name, each spell's enemy player, nearest and combat rank copies right after it
+    -- order, then by name, each spell's enemy player and nearest copies right after it
     table.sort(smb.macros, function(a, b)
         if a.categoryRank ~= b.categoryRank then return a.categoryRank < b.categoryRank end
         if (not a.first) ~= (not b.first) then return a.first == true end
@@ -2065,9 +2049,9 @@ function smb.isOnActionBars(macro, bars)
     return smb.countsSpellsOnBars() or macro.body == bareBody(macro.name)
 end
 
--- Flips a setting ("enemyPlayer", "nearest", "combatRank1", "pet", "spam", "petAttack",
+-- Flips a setting ("enemyPlayer", "nearest", "pet", "spam", "petAttack",
 -- "stopCast" or "startAttack", or "equipStopAttack" or "equipStopCast" on an equipment macro) and rewrites
--- the macro if it already exists. In combat the rewrite waits until the next pickup. The enemyPlayer, nearest and combatRank1 settings add or remove a page entry, so the page must be rebuilt after any of them.
+-- the macro if it already exists. In combat the rewrite waits until the next pickup. The enemyPlayer and nearest settings add or remove a page entry, so the page must be rebuilt after any of them.
 -- Stores a defaulted setting only where it differs from the default, so the rest follow a change of default.
 local function setDefaulted(macro, key, on)
     if on == optionDefault(key) then
@@ -2083,13 +2067,11 @@ local function rewrite(macro)
     syncMacro(macro, GetMacroIndexByName(macro.macroName))
 end
 
-local removedCopies = {} -- the WoW macro names of copies turned off since smb.takeRemovedCopies
-
 -- Notes that turning COPY_OPTIONS key off on macro (a spell's macro or one of its copies) removes that copy
 -- and its variants, so the action bars can put the spell's own macro back (see ActionBars.lua).
 local function noteRemovedCopy(macro, key)
     for _, other in ipairs(smb.macros) do
-        local matches = other.name == macro.name and (key == "enemyPlayer" and other.enemyPlayer or key == "nearest" and other.nearest or key == "combatRank1" and other.combatCopy)
+        local matches = other.name == macro.name and (key == "enemyPlayer" and other.enemyPlayer or key == "nearest" and other.nearest)
         if matches then removedCopies[#removedCopies + 1] = {macroName = other.macroName, spell = macro.name, copy = other} end
     end
 end
@@ -2217,8 +2199,8 @@ function smb.setFollowUpSpell(macro, name)
     rewrite(macro)
 end
 
--- Sets the rank a macro casts (nil for Normal, or "raid"), then rewrites the macro like smb.toggleOption.
--- It is stored without checking the sequence (see smb.rank): the menu greys Downrank In Raids out while one is on.
+-- Sets the rank a macro casts (nil for Normal, "raid" or "combat"), then rewrites the macro like smb.toggleOption.
+-- It is stored without checking the sequence (see smb.rank): the menu greys the downranks out while one is on.
 function smb.setRank(macro, rank)
     rankSettings()[settingKey(macro, "rank")] = rank
     rewrite(macro)
@@ -2232,7 +2214,7 @@ end
 
 -- The settings a spell macro stores under its settingKey, and an equipment macro under its slot.
 local SPELL_SETTINGS = {
-    "castOn", "enemyPlayer", "nearest", "combatRank1", "pet", "rank", "spam",
+    "castOn", "enemyPlayer", "nearest", "pet", "rank", "spam",
     "petAttack", "stopCast", "startAttack", "startAttackBefore", "petAttackAfter", "autoShotBefore",
     "autoShotAfter", "petFollowBefore", "petFollowAfter",
     "stopAttackBefore", "stopAttackAfter", "cancelIceBlockBefore", "clearDeadBefore", "targetEnemyBefore", "useItems", "useItemsAfter", "racials", "racialsAfter", "order", "orderAfter", "modifiers", "forms",
@@ -2271,7 +2253,7 @@ function smb.hasCustomSettings(macro)
 end
 
 -- Clears every setting of a macro, so it follows the defaults again, then rewrites it like smb.toggleOption.
--- Resetting a spell's macro turns enemyPlayer, nearest and combatRank1 off, removing the copies along
+-- Resetting a spell's macro turns enemyPlayer and nearest off, removing the copies along
 -- with their own settings, so the page must be rebuilt after.
 function smb.resetMacro(macro)
     if not smb.offersReset(macro) then return end
@@ -2283,7 +2265,7 @@ function smb.resetMacro(macro)
     end
     local stored = storedSettings(macro)
     if not noCopies then
-        for _, copy in ipairs({{enemyPlayer = true}, {nearest = true}, {combatCopy = true}}) do
+        for _, copy in ipairs({{enemyPlayer = true}, {nearest = true}}) do
             copy.name = macro.name
             for _, pair in ipairs(storedSettings(copy)) do stored[#stored + 1] = pair end
         end
@@ -2349,12 +2331,11 @@ function smb.deleteMacroNamed(name)
     generalMacros()[name] = nil
 end
 
--- A spell's copy turned on by a COPY_OPTIONS key ("enemyPlayer", "nearest" or "combatRank1"), from
+-- A spell's copy turned on by a COPY_OPTIONS key ("enemyPlayer" or "nearest"), from
 -- smb.macros, or nil.
 function smb.copyOf(spell, key)
     for _, macro in ipairs(smb.macros) do
-        if macro.name == spell and not macro.variant and (key == "enemyPlayer" and macro.enemyPlayer or key == "nearest" and macro.nearest
-            or key == "combatRank1" and macro.combatCopy) then
+        if macro.name == spell and not macro.variant and (key == "enemyPlayer" and macro.enemyPlayer or key == "nearest" and macro.nearest) then
             return macro
         end
     end
