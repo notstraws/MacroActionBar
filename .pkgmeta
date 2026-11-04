@@ -5,3 +5,4 @@ ignore:
   - .luacheckrc
   - .pkgmeta
   - tools
+  - patch-notes
