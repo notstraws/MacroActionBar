@@ -469,7 +469,7 @@ function smb.showMacroMenu(owner, macro, onChange, actionSlot, plainSpell)
                 if smb.duplicateMacro(macro, actionSlot) then onChange() end
             end):SetEnabled(outOfCombat)
         end
-        -- Delete Macro deletes a variant, putting the macro it came from back on its buttons
+        -- Delete Macro deletes a variant and takes it off its buttons
         if macro.variant then
             rootDescription:CreateButton("Delete Macro", function()
                 smb.removeVariant(macro)
