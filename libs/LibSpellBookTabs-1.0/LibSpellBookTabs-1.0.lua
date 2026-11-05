@@ -37,7 +37,7 @@ down the book's right edge.
 Nothing Blizzard owns is written to: everything is layered over the book.
 ]]
 
-local MAJOR, MINOR = "LibSpellBookTabs-1.0", 6
+local MAJOR, MINOR = "LibSpellBookTabs-1.0", 7
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -94,8 +94,17 @@ local function selectTab(button, selected)
     button.glow:SetShown(selected)
 end
 
+-- frames anchored to restricted or secret regions (such as PingPin) can't be measured: asking raises a
+-- "Can't measure restricted regions" error that blames our addon
+local function canMeasure(frame)
+    if frame.IsAnchoringRestricted and frame:IsAnchoringRestricted() then return false end
+    if frame.IsAnchoringSecret and frame:IsAnchoringSecret() then return false end
+    return true
+end
+
 -- left, bottom, right, top in screen pixels, so frames with different scales compare
 local function screenRect(frame)
+    if not canMeasure(frame) then return end
     local left, bottom, width, height = frame:GetRect()
     if not left then return end
     local scale = frame:GetEffectiveScale()
@@ -148,6 +157,7 @@ local function isAncestor(frame, child)
 end
 
 local function screenCenter(frame)
+    if not canMeasure(frame) then return end
     local x, y = frame:GetCenter()
     if not x then return end
     local scale = frame:GetEffectiveScale()
